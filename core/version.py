@@ -1,0 +1,39 @@
+APP_NAME = "Jaron's OP Makro"      # Anzeigename (Fenstertitel, Seitenleiste)
+APP_ID = "JaronsOPMakro"           # Dateiname der EXE und Ordnername für Einstellungen (ohne Sonderzeichen)
+APP_VERSION = "1.5.3"
+SHORT_NAME = "JOPML"               # Kürzel, das im App-Icon immer sichtbar bleibt
+
+# Hier liegt die version.json (GitHub-Release "latest")
+UPDATE_MANIFEST_URL = ""   # wird unten aus SUPABASE_URL gebildet
+
+# Feedback-Formular: Ohne CONTACT_ENDPOINT öffnet sich das Mailprogramm des Nutzers (mailto:).
+FEEDBACK_EMAIL = "jrnwle@gmail.com"
+CONTACT_ENDPOINT = ""     # optional: https-Adresse eines Formular-Dienstes, der an FEEDBACK_EMAIL weiterleitet
+
+# ---------------------------------------------------------------- Google / Supabase
+# Die Google-Client-ID ist öffentlich (kein Geheimnis). Sie gehört in die Supabase-Auth-Einstellungen
+# (siehe supabase/config.toml); das zugehörige Client-SECRET gehört NIE in dieses Programm.
+GOOGLE_CLIENT_ID = "1074605193535-edplvmfud08vo1lebb2vb82s64r9m4aq.apps.googleusercontent.com"
+
+# Nach dem Anlegen des Supabase-Projekts hier eintragen (Project URL und "publishable"/anon key; beide sind
+# für Clients gedacht und öffentlich, die Sicherheit kommt von den RLS-Regeln in supabase/migrations).
+SUPABASE_URL = "https://qeomooxbfpwvcprvmows.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_WH_x6GQCKYCG2PASox7mfw_YkyUCptW"   # öffentlich, kein Geheimnis
+# Supabase Auth verlangt eine ZUSTELLBARE E-Mail-Adresse (".invalid"-Adressen werden abgelehnt). Jedes Konto bekommt deshalb
+# eine interne Adresse nach diesem Muster ("+name" landet im Postfach des Betreibers; die Nutzer sehen sie nie).
+# Bestätigungsmails sind aus, es wird also nichts versendet. {u} = Benutzername.
+PSEUDO_EMAIL_TEMPLATE = "jrnwle+{u}@gmail.com"
+OAUTH_LOOPBACK_PORT = 53682        # lokaler Rückkehr-Port der Google-Anmeldung (in Supabase als Redirect erlauben)
+# Updates: öffentlicher Supabase-Bereich "releases" (unabhängig von GitHub). Veröffentlicht wird im Launcher unter "Publish".
+UPDATE_MANIFEST_URL = SUPABASE_URL.rstrip("/") + "/storage/v1/object/public/releases/version.json"
+AI_FUNCTION = "jopml-ai"           # Name der Supabase Edge Function mit dem KI-Zugang (Gemini)
+
+# Optionaler eigener KI-Proxy statt Supabase (siehe server_examples/). Niemals einen API-Schlüssel eintragen!
+ASSISTANT_URL = ""
+
+# ---------------------------------------------------------------- Werbung
+# Platzhalter für die Werbefläche (siehe core/ads.py). Wird derzeit nicht ausgewertet.
+AD_UNIT_ID = ""                    # z. B. "ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy" (nur mobil, siehe Hinweis in ads.py)
+
+# Version der Nutzungsbedingungen. Wird sie erhöht, muss jeder Nutzer erneut zustimmen.
+LEGAL_VERSION = "2026-10-26"
