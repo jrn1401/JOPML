@@ -78,7 +78,66 @@ def active_window() -> dict | None:
     return None
 
 
-def list_windows() -> list[dict]:
+def monitors() -> list[dict]:
+    """Alle Monitore (nur Windows; sonst []): {"no": 1.., "work": (x, y, b, h) ohne Taskleiste, "full": (x, y, b, h), "primary": bool},
+    von links nach rechts nummeriert (bei gleicher Lage von oben nach unten)."""
+    if not WIN:
+        return []
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT), ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+        found: list[dict] = []
+        cb_t = ctypes.WINFUNCTYPE(ctypes.c_int, wintypes.HANDLE, wintypes.HDC, ctypes.POINTER(wintypes.RECT), wintypes.LPARAM)
+
+        def cb(hmon, _hdc, _rect, _l):
+            mi = MONITORINFO()
+            mi.cbSize = ctypes.sizeof(MONITORINFO)
+            if ctypes.windll.user32.GetMonitorInfoW(hmon, ctypes.byref(mi)):
+                m, w = mi.rcMonitor, mi.rcWork
+                found.append({"full": (m.left, m.top, m.right - m.left, m.bottom - m.top),
+                              "work": (w.left, w.top, w.right - w.left, w.bottom - w.top), "primary": bool(mi.dwFlags & 1)})
+            return 1
+        ctypes.windll.user32.EnumDisplayMonitors(None, None, cb_t(cb), 0)
+        found.sort(key=lambda m: (m["full"][0], m["full"][1]))
+        for i, m in enumerate(found, 1):
+            m["no"] = i
+        return found
+    except Exception:
+        return []
+
+
+def window_rect(hwnd):
+    """Sichtbarer Rahmen eines Fensters (links, oben, rechts, unten) ohne den unsichtbaren Schattenrand; nur Windows, sonst None."""
+    if not WIN or not hwnd:
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+        r = wintypes.RECT()
+        if ctypes.windll.dwmapi.DwmGetWindowAttribute(hwnd, 9, ctypes.byref(r), ctypes.sizeof(r)) != 0:
+            ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(r))
+        return (r.left, r.top, r.right, r.bottom)
+    except Exception:
+        return None
+
+
+def _win_usable(hwnd) -> bool:
+    """Echtes Programmfenster (nicht unsichtbar verdeckt wie UWP-Hüllen, kein Werkzeugfenster)?"""
+    import ctypes
+    from ctypes import wintypes
+    cloaked = wintypes.DWORD()
+    if ctypes.windll.dwmapi.DwmGetWindowAttribute(hwnd, 14, ctypes.byref(cloaked), ctypes.sizeof(cloaked)) == 0 and cloaked.value:
+        return False
+    style_ex = ctypes.windll.user32.GetWindowLongW(hwnd, -20)
+    return not (style_ex & 0x80) or bool(style_ex & 0x40000)          # WS_EX_TOOLWINDOW nur mit WS_EX_APPWINDOW
+
+
+def list_windows(detail: bool = False) -> list[dict]:
+    """Sichtbare Fenster mit Titel. detail=True ergänzt "rect" (links, oben, rechts, unten) und "min" (minimiert) und lässt
+    unsichtbare Hüllen und Werkzeugfenster weg (für das Speichern der Fensteranordnung)."""
     out: list[dict] = []
     try:
         if WIN:
@@ -90,7 +149,13 @@ def list_windows() -> list[dict]:
                 if ctypes.windll.user32.IsWindowVisible(hwnd):
                     t = _win_title(hwnd)
                     if t:
-                        out.append({"id": int(hwnd), "title": t, "proc": _win_proc(hwnd)})
+                        item = {"id": int(hwnd), "title": t, "proc": _win_proc(hwnd)}
+                        if detail:
+                            if not _win_usable(hwnd) or ctypes.windll.user32.IsIconic(hwnd):
+                                return True
+                            item["rect"] = window_rect(hwnd)
+                            item["pid"] = _win_pid(hwnd)
+                        out.append(item)
                 return True
             ctypes.windll.user32.EnumWindows(cb_t(cb), 0)
         elif MAC:
@@ -139,3 +204,42 @@ def move_window(win_id, x: int, y: int, w: int, h: int) -> str:
         return "wmctrl is not installed."
     except Exception as exc:
         return f"{type(exc).__name__}: {exc}"
+
+
+_SHELL_CLASSES = {"Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd"}
+
+
+def is_rect_fullscreen(win: tuple, mon: tuple, tol: int = 2) -> bool:
+    """Deckt das Fenster (links, oben, rechts, unten) den ganzen Monitor ab? (reine Rechnung, testbar)"""
+    return win[0] <= mon[0] + tol and win[1] <= mon[1] + tol and win[2] >= mon[2] - tol and win[3] >= mon[3] - tol
+
+
+def fullscreen_active() -> bool:
+    """True, wenn gerade ein fremdes Programm den ganzen Bildschirm ausfüllt (Spiel, Film, Präsentation). Nur unter Windows; sonst False."""
+    if not WIN:
+        return False
+    try:
+        import ctypes
+        import os
+        from ctypes import wintypes
+        u = ctypes.windll.user32
+        hwnd = u.GetForegroundWindow()
+        if not hwnd or _win_pid(hwnd) == os.getpid():
+            return False
+        cls = ctypes.create_unicode_buffer(64)
+        u.GetClassNameW(hwnd, cls, 64)
+        if cls.value in _SHELL_CLASSES:
+            return False
+        r = wintypes.RECT()
+        u.GetWindowRect(hwnd, ctypes.byref(r))
+
+        class MONITORINFO(ctypes.Structure):
+            _fields_ = [("cbSize", wintypes.DWORD), ("rcMonitor", wintypes.RECT), ("rcWork", wintypes.RECT), ("dwFlags", wintypes.DWORD)]
+        mi = MONITORINFO()
+        mi.cbSize = ctypes.sizeof(MONITORINFO)
+        mon = u.MonitorFromWindow(hwnd, 2)                     # MONITOR_DEFAULTTONEAREST
+        u.GetMonitorInfoW(mon, ctypes.byref(mi))
+        m = mi.rcMonitor
+        return is_rect_fullscreen((r.left, r.top, r.right, r.bottom), (m.left, m.top, m.right, m.bottom))
+    except Exception:
+        return False

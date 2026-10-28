@@ -37,6 +37,20 @@ def clean(text: str, limit: int = 300) -> str:
     return re.sub(r"[\"\r\n#]", "", str(text)).strip()[:limit]
 
 
+PLACEHOLDERS = ("{zeit}", "{runde}", "{name}")      # auch englisch: {time}, {round}
+
+
+def fill(text: str, ctx: dict | None) -> str:
+    """Ersetzt {zeit}/{time}, {runde}/{round} und {name} im Text. Ohne Angaben bleiben die Platzhalter stehen."""
+    ctx = ctx or {}
+    for keys, val in ((("zeit", "time"), ctx.get("time")), (("runde", "round"), ctx.get("round")), (("name",), ctx.get("name"))):
+        if val is None or val == "":
+            continue
+        for k in keys:
+            text = text.replace("{" + k + "}", str(val))
+    return text
+
+
 def value(p: Param, raw):
     """Prüft einen Eingabewert. Wirft ValueError mit anzeigbarem Text."""
     if p.kind == "text":
@@ -114,8 +128,47 @@ def _craft(v):
     return _head(v) + f"repeat {v['times']}\n{body}end\n"
 
 
+CHANNELS = ["Chat key as set", "All chat (Shift + chat key)"]
+GG_LANGS = ["English", "Deutsch", "Español", "All three"]
+GG_TEXT = {"English": "gg, well played!", "Deutsch": "gg, gut gespielt!", "Español": "gg, bien jugado!"}
+
+
+def _opener(chat_key: str, channel: str) -> str:
+    if channel == CHANNELS[1]:
+        return f"down shift\nkey {chat_key}\nup shift\n"
+    return f"key {chat_key}\n"
+
+
+def _send(chat_key: str, text: str, channel: str = "") -> str:
+    """Eine Nachricht: Chat öffnen, kurz warten, tippen, Enter."""
+    return _opener(chat_key, channel) + f'wait 150ms\ntype "{text}"\nwait 100ms\nkey enter\n'
+
+
 def _chat(v):
-    return _head(v) + f'key {v["chat_key"]}\nwait 150ms\ntype "{v["message"]}"\nwait 100ms\nkey enter\n'
+    return _head(v) + _send(v["chat_key"], v["message"], v.get("channel", ""))
+
+
+def _chat_multi(v):
+    """Mehrere Nachrichten (getrennt durch |) nacheinander, mit Mindestabstand (Schutz vor Chat-Spam)."""
+    msgs = [clean(m) for m in str(v["messages"]).split("|") if clean(m)]
+    if not 1 <= len(msgs) <= 8:
+        raise ValueError(tr("Enter 1 to 8 messages separated by |"))
+    out = _head(v)
+    for i, m in enumerate(msgs):
+        if i:
+            out += f"wait {v['gap']}s\n"
+        out += _send(v["chat_key"], m, v.get("channel", ""))
+    return out
+
+
+def _gg_multi(v):
+    langs = ["English", "Deutsch", "Español"] if v["language"] == "All three" else [v["language"]]
+    out = _head(v)
+    for i, lg in enumerate(langs):
+        if i:
+            out += f"wait {v['gap']}s\n"
+        out += _send(v["chat_key"], GG_TEXT[lg], v.get("channel", ""))
+    return out
 
 
 def _emote(v):
@@ -152,9 +205,23 @@ PRESETS = [
            [_DELAY, Param("positions", "Positions (x,y; x,y; …)", "400,300; 500,300; 700,300", "text"),
             Param("times", "Repeat", 10, "int", 1, 1000), Param("pause", "Pause per click (ms)", 150, "int", 0, 5000)], _craft),
     Preset("chat_msg", "chat", "Send a prepared message",
-           "Opens the chat with the chosen key, types your message and sends it.",
+           "Opens the chat with the chosen key, types your message and sends it. Placeholders: {zeit} time, {runde} round number, {name} your name.",
            [_DELAY, Param("chat_key", "Key that opens the chat", "enter", "choice", choices=CHAT_KEYS),
-            Param("message", "Message", "Good game, well played!", "text")], _chat),
+            Param("message", "Message", "Good game, well played!", "text"),
+            Param("channel", "Channel", CHANNELS[0], "choice", choices=CHANNELS)], _chat),
+    Preset("chat_multi", "chat", "Several messages in a row",
+           "Sends up to 8 messages one after another, separated by |. The pause between them protects you from chat spam (at least 2 seconds). "
+           "Placeholders: {zeit} time, {runde} round number, {name} your name.",
+           [_DELAY, Param("chat_key", "Key that opens the chat", "enter", "choice", choices=CHAT_KEYS),
+            Param("messages", "Messages (separated by |)", "gg | see you next round, {name}", "text"),
+            Param("gap", "Pause between messages (s)", 3, "int", 2, 60),
+            Param("channel", "Channel", CHANNELS[0], "choice", choices=CHANNELS)], _chat_multi),
+    Preset("chat_gg_multi", "chat", "GG in several languages",
+           "Says “gg” in English, German, Spanish or all three one after another.",
+           [_DELAY, Param("chat_key", "Key that opens the chat", "enter", "choice", choices=CHAT_KEYS),
+            Param("language", "Language", GG_LANGS[0], "choice", choices=GG_LANGS),
+            Param("gap", "Pause between messages (s)", 3, "int", 2, 60),
+            Param("channel", "Channel", CHANNELS[0], "choice", choices=CHANNELS)], _gg_multi),
     Preset("chat_gg", "chat", "Say GG",
            "A quick “gg” at the end of a round.",
            [_DELAY, Param("chat_key", "Key that opens the chat", "enter", "choice", choices=CHAT_KEYS), Param("message", "Message", "gg", "text")], _chat),
@@ -169,9 +236,13 @@ PRESETS = [
 BY_ID = {p.id: p for p in PRESETS}
 
 
-def build(preset: Preset, raw: dict) -> str:
-    """Erzeugt das Makro aus Roheingaben (Texte). Wirft ValueError mit anzeigbarem Text. Das Ergebnis wird zusätzlich vom Makro-Parser geprüft."""
+def build(preset: Preset, raw: dict, ctx: dict | None = None) -> str:
+    """Erzeugt das Makro aus Roheingaben (Texte). Wirft ValueError mit anzeigbarem Text. Das Ergebnis wird zusätzlich vom Makro-Parser geprüft.
+    ctx: Werte für die Platzhalter {zeit}, {runde}, {name} in Textfeldern."""
     vals = {p.key: value(p, raw.get(p.key, p.default)) for p in preset.params}
+    for p in preset.params:
+        if p.kind == "text" and isinstance(vals[p.key], str):
+            vals[p.key] = clean(fill(vals[p.key], ctx))
     script = preset.build(vals)
     from modules.macros import dsl
     try:

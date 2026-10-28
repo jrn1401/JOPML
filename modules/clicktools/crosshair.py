@@ -1,8 +1,10 @@
+from core import perf
 """Fadenkreuz-Overlay: kleines, immer sichtbares Zielkreuz in der Bildschirmmitte (Form, Farbe, Größe, Deckkraft)."""
 import re
 import sys
 from dataclasses import asdict, dataclass
 
+COVER_SHAPES = ["Disc", "Square", "Cross"]
 REACTIONS = ["Colour on fire", "Spread on fire"]
 SHAPES = ["Cross", "Cross with gap", "Dot", "Circle", "Circle + dot", "T-shape"]
 PRESETS = {
@@ -28,9 +30,15 @@ class CrosshairConfig:
     cover: bool = False             # deckt das Fadenkreuz des Spiels mit einer ausgefüllten Scheibe ab
     cover_size: int = 10            # Radius der Scheibe in Pixeln
     cover_color: str = "#101418"
+    cover_shape: str = "Cross"      # Scheibe, Quadrat oder Kreuz (deckt nur die Striche des Spiel-Fadenkreuzes ab)
+    cover_thickness: int = 6        # Strichbreite beim Kreuz in Pixeln
+    cover_auto: bool = True         # Farbe aus der Umgebung des Fadenkreuzes nehmen statt einer festen Farbe
     react_on: bool = False          # Reaktion beim Schießen ein/aus
     react: str = "Colour on fire"   # Art der Reaktion (linke Maustaste gehalten)
     react_color: str = "#ff3030"
+    spread_px: int = 6              # so weit rücken die Striche beim Schießen auseinander
+    spread_rise_ms: int = 80        # Zeit bis zur vollen Streuung beim Schießen
+    spread_fall_ms: int = 250       # Zeit, bis die Streuung nach dem Schießen wieder zurück ist
     keep_top: bool = True           # regelmäßig wieder über das Spiel holen
     hide_on_aim: bool = False       # beim Zielen (rechte Maustaste gehalten) ausblenden, z. B. wenn das Spiel ein Visier zeigt
 
@@ -47,6 +55,12 @@ class CrosshairConfig:
         self.react_on, self.keep_top = bool(self.react_on), bool(self.keep_top)
         self.cover_size = max(2, min(120, int(self.cover_size)))
         self.cover_color = self.cover_color if _HEX.match(str(self.cover_color)) else "#101418"
+        self.cover_shape = self.cover_shape if self.cover_shape in COVER_SHAPES else "Cross"
+        self.cover_thickness = max(1, min(40, int(self.cover_thickness)))
+        self.cover_auto = bool(self.cover_auto)
+        self.spread_px = max(0, min(60, int(self.spread_px)))
+        self.spread_rise_ms = max(10, min(2000, int(self.spread_rise_ms)))
+        self.spread_fall_ms = max(10, min(3000, int(self.spread_fall_ms)))
         self.react = self.react if self.react in REACTIONS else REACTIONS[0]
         self.react_color = self.react_color if _HEX.match(str(self.react_color)) else "#ff3030"
         return self
@@ -70,24 +84,40 @@ class CrosshairConfig:
         return asdict(self)
 
 
-SPREAD = 6        # so viele Pixel rücken die Striche beim Schießen auseinander
-
-
 def state_look(cfg: CrosshairConfig, firing: bool, aiming: bool) -> tuple[str, int, bool]:
-    """(Farbe, zusätzliche Lücke, sichtbar) für den aktuellen Zustand."""
+    """(Farbe, Ziel-Streuung in Pixeln, sichtbar) für den aktuellen Zustand. Die Streuung läuft im Overlay weich auf dieses Ziel zu."""
     if aiming and cfg.hide_on_aim:
         return cfg.color, 0, False
     if firing and cfg.react_on and cfg.react == "Colour on fire":
         return cfg.react_color, 0, True
     if firing and cfg.react_on and cfg.react == "Spread on fire":
-        return cfg.color, SPREAD, True
+        return cfg.color, cfg.spread_px, True
     return cfg.color, 0, True
+
+
+def step_spread(cur: float, target: float, cfg: CrosshairConfig, dt_ms: float) -> float:
+    """Ein Zeitschritt der Streuung: steigt in spread_rise_ms auf spread_px und fällt in spread_fall_ms wieder auf 0."""
+    full = max(1, cfg.spread_px)
+    if target > cur:
+        return min(target, cur + full * dt_ms / cfg.spread_rise_ms)
+    return max(target, cur - full * dt_ms / cfg.spread_fall_ms)
 
 
 def extent(cfg: CrosshairConfig) -> int:
     """Größte Ausdehnung vom Mittelpunkt aus (für die Fenstergröße)."""
-    r = cfg.size + (SPREAD if cfg.react_on and cfg.react == "Spread on fire" else 0)
+    r = cfg.size + (cfg.spread_px if cfg.react_on and cfg.react == "Spread on fire" else 0)
     return max(r, cfg.cover_size if cfg.cover else 0)
+
+
+def cover_shapes(cfg: CrosshairConfig) -> list[tuple]:
+    """Gefüllte Abdeckung relativ zur Mitte: (Name, Art, x1, y1, x2, y2). Name: "all", "h" oder "v" (Farbe pro Achse)."""
+    r, t = cfg.cover_size, max(1, cfg.cover_thickness)
+    h = t / 2
+    if cfg.cover_shape == "Disc":
+        return [("all", "oval", -r, -r, r, r)]
+    if cfg.cover_shape == "Square":
+        return [("all", "rect", -r, -r, r, r)]
+    return [("h", "rect", -r, -h, r, h), ("v", "rect", -h, -r, h, r)]
 
 
 def primitives(cfg: CrosshairConfig, extra_gap: int = 0) -> list[tuple]:
@@ -109,9 +139,11 @@ def primitives(cfg: CrosshairConfig, extra_gap: int = 0) -> list[tuple]:
 
 class CrosshairOverlay:
     """Rahmenloses, durchsichtiges Fenster. Klick-durchlässig unter Windows; auf macOS/Linux ist die Durchsichtigkeit je nach
-    Desktop eingeschränkt (siehe Hinweis in der App). Mit "cover" liegt eine ausgefüllte Scheibe unter dem Fadenkreuz und
-    verdeckt das Fadenkreuz des Spiels; "react" und "hide_on_aim" folgen den Maustasten."""
+    Desktop eingeschränkt (siehe Hinweis in der App). Mit "cover" liegt eine ausgefüllte Form (Scheibe, Quadrat oder nur ein Kreuz)
+    unter dem Fadenkreuz und verdeckt das Fadenkreuz des Spiels; ihre Farbe kann live aus der Umgebung genommen werden, damit
+    nichts Dunkles stört. "react" und "hide_on_aim" folgen den Maustasten, die Streuung läuft weich."""
     KEY = "#010203"       # wird unter Windows komplett durchsichtig
+    RING = 6              # so breit ist der Streifen um das Fenster, aus dem die Umgebungsfarbe gelesen wird
 
     def __init__(self, app):
         self.app = app
@@ -121,6 +153,7 @@ class CrosshairOverlay:
         self.firing = self.aiming = False
         self._listener = None
         self._looks = None
+        self.spread = 0.0
 
     @property
     def active(self) -> bool:
@@ -152,6 +185,7 @@ class CrosshairOverlay:
         self._box = box
         self.win = w
         self.firing = self.aiming = False
+        self.spread = 0.0
         self._looks = None
         self._draw()
         w.update_idletasks()
@@ -161,11 +195,16 @@ class CrosshairOverlay:
             self._raise()
         if cfg.react_on or cfg.hide_on_aim:
             self._start_listener()
+        if cfg.cover and cfg.cover_auto:
+            self._cover_colors()
+        if cfg.react_on and cfg.react == "Spread on fire":
+            self._animate()
 
     def _draw(self):
         if self.win is None:
             return
-        color, extra, visible = state_look(self.cfg, self.firing, self.aiming)
+        color, target, visible = state_look(self.cfg, self.firing, self.aiming)
+        extra = int(round(self.spread)) if self.cfg.react == "Spread on fire" and self.cfg.react_on else 0
         looks = (color, extra, visible)
         if looks == self._looks:
             return
@@ -175,14 +214,60 @@ class CrosshairOverlay:
         if not visible:
             return
         if cfg.cover:
-            r = cfg.cover_size
-            c.create_oval(m - r, m - r, m + r, m + r, fill=cfg.cover_color, outline=cfg.cover_color)
+            for name, kind, x1, y1, x2, y2 in cover_shapes(cfg):
+                draw = c.create_oval if kind == "oval" else c.create_rectangle
+                draw(m + x1, m + y1, m + x2, m + y2, fill=cfg.cover_color, outline=cfg.cover_color, tags=("cover", "cover_" + name))
+            self._cover_apply()
         for p in primitives(cfg, extra):
             if p[0] == "line":
                 c.create_line(m + p[1], m + p[2], m + p[3], m + p[4], fill=color, width=cfg.thickness)
             else:
                 c.create_oval(m + p[1], m + p[2], m + p[3], m + p[4], outline=color, width=cfg.thickness,
                               fill=color if p[5] else "")
+
+    # ---- Abdeckung in Umgebungsfarbe
+    def _cover_colors(self):
+        """Liest alle 250 ms die Farbe direkt um das Fenster und färbt die Abdeckung so, dass sie nicht als dunkler Fleck auffällt."""
+        if self.win is None or not (self.cfg.cover and self.cfg.cover_auto):
+            return
+        try:
+            from PIL import ImageGrab
+            r, box = self.RING, self._box
+            x0, y0 = self.win.winfo_rootx() - r, self.win.winfo_rooty() - r
+            img = ImageGrab.grab(bbox=(x0, y0, x0 + box + 2 * r, y0 + box + 2 * r)).convert("RGB")
+            self._ring = ring_colors(img, box, r)
+            self._cover_apply()
+        except Exception:
+            self._ring = None
+        try:
+            self.win.after(250, self._cover_colors)
+        except Exception:
+            pass
+
+    def _cover_apply(self):
+        ring = getattr(self, "_ring", None)
+        if not (self.cfg.cover and self.cfg.cover_auto and ring) or self.canvas is None:
+            return
+        hexc = lambda rgb: "#%02x%02x%02x" % rgb
+        both = hexc(mix(ring["left"], ring["right"], ring["top"], ring["bottom"]))
+        colors = {"all": both, "h": hexc(mix(ring["left"], ring["right"])), "v": hexc(mix(ring["top"], ring["bottom"]))}
+        for name, col in colors.items():
+            try:
+                self.canvas.itemconfig("cover_" + name, fill=col, outline=col)
+            except Exception:
+                pass
+
+    # ---- weiche Streuung beim Schießen
+    def _animate(self, last=None):
+        if self.win is None or not (self.cfg.react_on and self.cfg.react == "Spread on fire"):
+            return
+        import time
+        now = time.perf_counter()
+        dt = 30.0 if last is None else min(100.0, (now - last) * 1000)
+        _c, target, visible = state_look(self.cfg, self.firing, self.aiming)
+        self.spread = step_spread(self.spread, target, self.cfg, dt)
+        self._draw()
+        self.win.after(perf.ms(30), lambda: self._animate(now))
 
     def _raise(self):
         if self.win is None:
@@ -226,3 +311,22 @@ class CrosshairOverlay:
             except Exception:
                 pass
             self.win = None
+
+
+def mix(*colors) -> tuple[int, int, int]:
+    """Mittelwert mehrerer RGB-Farben."""
+    n = len(colors)
+    return tuple(int(sum(c[i] for c in colors) / n) for i in range(3))
+
+
+def ring_colors(img, box: int, ring: int) -> dict:
+    """Farben direkt außerhalb des Fensters (links, rechts, oben, unten), jeweils Mittel aus drei Bildpunkten.
+    img ist der Bildausschnitt mit einem Rand von `ring` Pixeln um das Fenster."""
+    mid = ring + box // 2
+    near = ring // 2
+
+    def avg(points):
+        return mix(*[img.getpixel(p) for p in points])
+    span = (-1, 0, 1)
+    return {"left": avg([(near, mid + d) for d in span]), "right": avg([(ring + box + near, mid + d) for d in span]),
+            "top": avg([(mid + d, near) for d in span]), "bottom": avg([(mid + d, ring + box + near) for d in span])}

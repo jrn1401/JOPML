@@ -8,6 +8,7 @@ gesperrt gehen Klicks hindurch (wichtig im Spiel). Ein Overlay kann nur über Fe
 import sys
 import tkinter as tk
 
+from core import perf
 from core import ui
 
 from . import keyoverlay, sysinfo, winflags
@@ -16,6 +17,7 @@ from .overlaystyle import OverlayStyle
 KEY = "#010203"            # Farbe, die als "durchsichtig" gilt
 BOX = "#101418"
 RAISE_MS = 1500
+STREAMER = {"on": False}       # Streamer-Modus: Overlays erscheinen nicht in Aufnahmen und Streams (Windows 10/11)
 
 
 def _make_transparent(w) -> bool:
@@ -62,6 +64,7 @@ class _OverlayWindow:
         self.win = w
         w.update_idletasks()
         winflags.prepare(w, self.style.locked)
+        winflags.exclude_from_capture(w, STREAMER["on"])
         self._raise()
         return w
 
@@ -177,7 +180,7 @@ class StatsOverlay(_OverlayWindow):
             if text != self._last_text:
                 self._last_text = text
                 self._draw(text)
-            self.win.after(500, self._refresh)
+            self.win.after(perf.ms(500), self._refresh)
         except tk.TclError:
             self.win = None
 
@@ -232,7 +235,7 @@ class KeysOverlay(_OverlayWindow):
                 down = self.state.is_down(k)
                 ui.cfg(lab, bg=hi if down else "#2b3138", fg="#001014" if down else "#e5e7eb")
             ui.cfg(self.recent, text=" ".join(self.state.recent_keys()[-6:]))
-            self.win.after(40, self._refresh)
+            self.win.after(perf.ms(40), self._refresh)
         except tk.TclError:
             self.win = None
 
@@ -241,3 +244,48 @@ class KeysOverlay(_OverlayWindow):
             self.listener.stop()
             self.listener = None
         super().hide()
+
+
+class TextOverlay(_OverlayWindow):
+    """Überlagerung mit frei wählbarem Text (Match-Zähler, Timer, Notizen, Ping). provider() liefert den Text, leer = nichts anzeigen."""
+
+    def __init__(self, app, style: OverlayStyle | None, provider, interval_ms: int = 500):
+        super().__init__(app, style or OverlayStyle())
+        self.provider, self.interval = provider, interval_ms
+        self._last = None
+
+    def show(self):
+        self.hide()
+        w = self._open()
+        import tkinter.font as tkfont
+        weight = "bold" if self.style.bold else "normal"
+        self.font = tkfont.Font(root=self.app, family=self.style.font, size=self.style.size, weight=weight)
+        self.canvas = tk.Canvas(w, bg=BOX if (self.style.background or not self.transparent) else KEY, highlightthickness=0, bd=0)
+        self.canvas.pack()
+        self._last = None
+        self._refresh()
+
+    def _draw(self, text: str):
+        c, f, st = self.canvas, self.font, self.style
+        lines = text.split("\n")
+        pad = 8
+        width = max(f.measure(line) for line in lines) + 2 * pad + 2
+        height = f.metrics("linespace") * len(lines) + 2 * pad + 2
+        c.delete("all")
+        c.configure(width=width, height=height)
+        if st.outline:
+            for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1)):
+                c.create_text(pad + 1 + dx, pad + 1 + dy, anchor="nw", text=text, font=f, fill="#000000")
+        c.create_text(pad + 1, pad + 1, anchor="nw", text=text, font=f, fill=st.color)
+
+    def _refresh(self):
+        if self.win is None:
+            return
+        try:
+            text = self.provider() or " "
+            if text != self._last:
+                self._last = text
+                self._draw(text)
+            self.win.after(self.interval, self._refresh)
+        except tk.TclError:
+            self.win = None

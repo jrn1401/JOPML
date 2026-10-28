@@ -1,4 +1,4 @@
-"""Modul "Browsing / Extensions"."""
+"""Modul "Extensions"."""
 from core import config
 from core.plugin_api import BasePlugin
 
@@ -7,7 +7,7 @@ from .catalog import Store
 
 class Plugin(BasePlugin):
     id = "extensions"
-    name = "Browsing / Extensions"
+    name = "Extensions"
     icon = "🧩"
     version = "1.1.0"
     order = 30

@@ -48,6 +48,7 @@ class ChatView(ctk.CTkFrame):
         self._reply_to: dict | None = None
         self._unread_known: set[str] = set()
         self._channel_names: dict[str, str] = {}
+        self.plugin.chat_active = True
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
 
@@ -117,6 +118,10 @@ class ChatView(ctk.CTkFrame):
             self._refresh_spaces()
         self._schedule()
 
+    def destroy(self):
+        self.plugin.chat_active = False
+        super().destroy()
+
     def _set_input(self, on: bool):
         state = "normal" if on else "disabled"
         self.entry.configure(state=state)
@@ -166,8 +171,12 @@ class ChatView(ctk.CTkFrame):
         self._unread_known = now
         if fresh and not first:
             self._idle = 0
-            names = [c["name"] for sp in self.svc.spaces for c in sp.get("channels", []) if c["id"] in fresh]
-            self.app.notifier.notify("chat", tr("New messages"), ", ".join("#" + n for n in names[:3]) if names else "")
+            from .watcher import fresh_events, unread_map
+            prefs = self.app.notifier.prefs()
+            cur = {"unread": unread_map(self.svc.spaces, self.plugin.is_unread, self.cur_channel or ""), "invites": 0, "news": 0, "market": 0}
+            prev = {"unread": {k: v for k, v in cur["unread"].items() if k not in fresh}, "invites": 0, "news": 0, "market": 0}
+            for ev, title, text in fresh_events(prev, cur, prefs.muted_servers):
+                self.app.notifier.notify(ev, tr(title), text)
         btn = self.app.nav.get(self.plugin.id)
         if btn is not None:
             try:

@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
   if (!key) return json({ error: "The AI is not configured yet (missing GEMINI_API_KEY)." }, 503);
   const lang = typeof body.lang === "string" ? body.lang : "en";
   const version = typeof body.version === "string" ? body.version.slice(0, 20) : "";
-  const handbook = typeof body.handbook === "string" && body.handbook.length <= 20000 ? body.handbook : "";
+  const handbook = typeof body.handbook === "string" && body.handbook.length <= 40000 ? body.handbook : "";
   const streaming = body.stream === true && kind === "help";
   const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:${streaming ? "streamGenerateContent?alt=sse" : "generateContent"}`, {
     method: "POST",

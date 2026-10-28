@@ -2,6 +2,7 @@
 import os
 import queue
 import threading
+import time
 import traceback
 
 import customtkinter as ctk
@@ -88,27 +89,77 @@ class DashboardPage(ctk.CTkScrollableFrame):
         ctk.CTkButton(upd, text=tr("Check for updates"), width=170, command=lambda: app.check_updates(manual=True)).pack(side="right", padx=16)
         ai = ctk.CTkFrame(self, fg_color=theme.c("card"), corner_radius=theme.CARD_RADIUS, border_width=1, border_color=theme.c("hover"))
         ai.pack(fill="x", padx=24, pady=(0, 8))
-        t = ctk.CTkFrame(ai, fg_color="transparent")
-        t.pack(side="left", padx=16, pady=12)
-        ctk.CTkLabel(t, text="💬  " + tr("AI assistant"), font=ctk.CTkFont(size=15, weight="bold"), anchor="w").pack(anchor="w")
-        ctk.CTkLabel(t, text=tr("Ask about the launcher, or let the AI write a macro from your description in 'Add macros'."),
-                     text_color=theme.MUTED, anchor="w", wraplength=480, justify="left").pack(anchor="w")
-        ctk.CTkButton(ai, text=tr("Open"), width=90, command=lambda: app.show("assistant")).pack(side="right", padx=16)
-        ctk.CTkLabel(self, text=tr("Modules"), font=ctk.CTkFont(size=18, weight="bold")).pack(anchor="w", padx=24, pady=(14, 6))
+        ctk.CTkLabel(ai, text="💬  " + tr("Chat with the AI assistant"), font=ctk.CTkFont(size=20, weight="bold"), anchor="w").pack(
+            fill="x", padx=20, pady=(18, 4))
+        ctk.CTkLabel(ai, text=tr("Ask questions about the program or let the AI create macros for you – just describe what you need."),
+                     text_color=theme.MUTED, anchor="w", wraplength=620, justify="left", font=ctk.CTkFont(size=14)).pack(fill="x", padx=20)
+        ctk.CTkButton(ai, text="💬  " + tr("Start chat"), height=44, font=ctk.CTkFont(size=15, weight="bold"),
+                      command=lambda: app.show("assistant")).pack(fill="x", padx=20, pady=(14, 18))
+        # Aufklappbare Modul-Übersicht (standardmäßig zu)
+        self._mods_open = False
+        self._mods_btn = ctk.CTkButton(self, text="▸  " + tr("Module overview"), anchor="w", height=40, fg_color=theme.c("card"),
+                                       text_color=theme.TEXT, hover_color=theme.c("hover"), corner_radius=theme.CARD_RADIUS,
+                                       font=ctk.CTkFont(size=16, weight="bold"), command=self._toggle_modules)
+        self._mods_btn.pack(fill="x", padx=24, pady=(10, 4))
+        self._mods = ctk.CTkFrame(self, fg_color="transparent")
         for p in app.visible_plugins():
-            card = ctk.CTkFrame(self, fg_color=theme.c("card"), corner_radius=theme.CARD_RADIUS, border_width=1, border_color=theme.c("hover"))
-            card.pack(fill="x", padx=24, pady=5)
+            card = ctk.CTkFrame(self._mods, fg_color=theme.c("card"), corner_radius=theme.CARD_RADIUS, border_width=1, border_color=theme.c("hover"))
+            card.pack(fill="x", pady=5)
             text = ctk.CTkFrame(card, fg_color="transparent")
             text.pack(side="left", padx=16, pady=12)
             ctk.CTkLabel(text, text=f"{tr(p.name)}  ·  v{p.version}", font=ctk.CTkFont(size=15, weight="bold"), anchor="w").pack(anchor="w")
             ctk.CTkLabel(text, text=tr(p.dashboard_summary()), text_color=theme.MUTED, anchor="w", wraplength=480, justify="left").pack(anchor="w")
             ctk.CTkButton(card, text=tr("Open"), width=90, command=lambda pid=p.id: app.show(pid)).pack(side="right", padx=16)
+
+            def paint(inside, card=card):
+                if app.settings.get("hover_effect", True):
+                    card.configure(fg_color=theme.hover_tint() if inside else theme.c("card"),
+                                   border_color=theme.accent() if inside else theme.c("hover"))
+            hover_area(card, paint, extra=tuple(text.winfo_children()) + (text,))
         for name, err in app.failed + app.load_failed:
             ctk.CTkLabel(self, text=tr("Module '{m}' could not be loaded: {e}", m=name, e=err), text_color=theme.DANGER,
                          wraplength=640, justify="left").pack(anchor="w", padx=24, pady=4)
 
+    def _toggle_modules(self):
+        self._mods_open = not self._mods_open
+        if self._mods_open:
+            self._mods.pack(fill="x", padx=24, after=self._mods_btn)
+        else:
+            self._mods.pack_forget()
+        self._mods_btn.configure(text=("▾  " if self._mods_open else "▸  ") + tr("Module overview"))
+
     def set_update_text(self, text: str):
         self.update_label.configure(text=text)
+
+
+def hover_area(widget, on_change, extra=()) -> None:
+    """Meldet on_change(True/False), sobald die Maus über `widget` (samt Kindern) ist bzw. es verlässt.
+    Es wird die echte Mausposition geprüft: das verhindert Flackern, wenn die Maus über ein Kind-Widget (z. B. das Symbol) wandert."""
+    def inside() -> bool:
+        try:
+            px, py = widget.winfo_pointerxy()
+            x, y = widget.winfo_rootx(), widget.winfo_rooty()
+            return x <= px < x + widget.winfo_width() and y <= py < y + widget.winfo_height()
+        except Exception:
+            return False
+
+    def check(_e=None):
+        try:
+            on_change(inside())
+        except Exception:
+            pass
+
+    def leave(_e=None):
+        try:
+            widget.after(20, check)
+        except Exception:
+            pass
+    for w in (widget, *extra):
+        try:
+            w.bind("<Enter>", check, add="+")
+            w.bind("<Leave>", leave, add="+")
+        except Exception:
+            pass
 
 
 def _builtin_pages() -> dict:
@@ -145,6 +196,8 @@ class LauncherApp(ctk.CTk):
         self.identity = identity.make_identity(self.accounts)
         self.panic_key = None
         self.notifier = Notifier(self)
+        from core.hotkey_registry import Registry
+        self.hotkeys = Registry(self)
         self.user: dict | None = None
         self.is_admin = False
         self.update_text = tr("Update status: not checked yet")
@@ -163,6 +216,14 @@ class LauncherApp(ctk.CTk):
         self._rebuild_job = None
         self._prewarm_job = None
         self._compact = None
+        self._frozen = False
+        self._soft_scopes: set = set()
+        self._soft_job = None
+        from core.telemetry import Telemetry
+        self.telemetry = Telemetry(self)
+        self.telemetry.install_hooks()
+        self._last_size = None
+        self._last_input = time.monotonic()
         self.bind("<Configure>", self._on_resize)
         self.protocol("WM_DELETE_WINDOW", self.close)
         self.after(TICK_MS, self._drain)
@@ -218,6 +279,7 @@ class LauncherApp(ctk.CTk):
 
     def login_done(self, user: dict, days, resumed: bool = False):
         self.user = user
+        self.telemetry.start()
         if not resumed:
             try:
                 self.identity.remember(user, days)
@@ -247,6 +309,7 @@ class LauncherApp(ctk.CTk):
             self._loaded = True
         self.is_admin = False
         self._start_panic()
+        self.hotkeys.apply()
         self.build_main()
         self.show("dashboard")
         self.after(1500, self.check_updates)
@@ -295,6 +358,16 @@ class LauncherApp(ctk.CTk):
         if self.panic_key is None:
             self.panic_key = Panic(self)
         self.panic_key.start()
+        from core.hotkey_registry import Entry
+
+        def set_panic(key):
+            if not key:
+                return "Please enter a shortcut."
+            self.settings["panic_hotkey"] = key
+            self.save_settings()
+            return self.panic_key.start() or None
+        self.hotkeys.register(Entry("panic", "Emergency stop", "General", config.DEFAULT_SETTINGS["panic_hotkey"],
+                                    get_key=lambda: self.settings.get("panic_hotkey") or "", set_key=set_panic))
 
     def panic(self):
         """Stoppt Autoclicker, Makros und Recoil sofort."""
@@ -304,6 +377,7 @@ class LauncherApp(ctk.CTk):
         return done
 
     def _shutdown_plugins(self):
+        self.hotkeys.shutdown()
         if self.panic_key is not None:
             self.panic_key.stop()
         if self._loaded:
@@ -320,6 +394,17 @@ class LauncherApp(ctk.CTk):
         root = self.root_frame
         root.grid_columnconfigure(1, weight=1)
         root.grid_rowconfigure(0, weight=1)
+        self._build_sidebar(root)
+        G = theme.GAP
+        self.content = ctk.CTkFrame(root, corner_radius=theme.PANEL_RADIUS, fg_color=theme.c("main"),
+                                    border_width=1, border_color=theme.c("hover"))
+        self.content.grid(row=0, column=1, sticky="nsew", padx=(G // 2, G), pady=G)
+        self.content.grid_rowconfigure(1, weight=1)
+        self.content.grid_columnconfigure(0, weight=1)
+        self._build_banner()
+        # Das Dashboard wird erst beim ersten Anzeigen gebaut (spart beim Neuaufbau nach Einstellungen Zeit).
+
+    def _build_sidebar(self, root):
         G = theme.GAP
         self.sidebar = ctk.CTkFrame(root, width=235, corner_radius=theme.PANEL_RADIUS, fg_color=theme.c("sidebar"),
                                     border_width=1, border_color=theme.c("hover"))
@@ -337,23 +422,36 @@ class LauncherApp(ctk.CTk):
         ctk.CTkButton(bottom, text="■  " + tr("Emergency stop"), height=30, corner_radius=8, fg_color="#b91c1c",
                       hover_color="#7f1d1d", text_color="white", command=self.panic).pack(fill="x", padx=12, pady=(2, 4))
         self._add_nav("settings", "⚙  " + tr("Settings"), parent=bottom)
+        self._add_nav("assistant", "💬  " + tr("Help assistant"), parent=bottom)
+        self._add_nav("contact", "✉  " + tr("Contact"), parent=bottom)          # direkt unter dem Hilfe-Assistenten
         ctk.CTkButton(bottom, text="⎋  " + tr("Sign out"), anchor="w", height=36, corner_radius=8, fg_color="transparent",
                       text_color=theme.TEXT, hover_color=theme.c("hover"), command=self.logout).pack(fill="x", padx=12, pady=2)
         ctk.CTkLabel(bottom, text=f"v{APP_VERSION}", text_color=theme.MUTED).pack(pady=(4, 0))
         self._add_nav("dashboard", "⌂  " + tr("Dashboard"))
         for pid, label in self.nav_entries():
-            self._add_nav(pid, label)
+            if pid not in ("assistant", "contact"):      # stehen fest unten: Einstellungen, Hilfe-Assistent, Kontakt, Abmelden
+                self._add_nav(pid, label)
         self.refresh_user_labels()
         self._compact = None
         self._fit_sidebar()
 
-        self.content = ctk.CTkFrame(root, corner_radius=theme.PANEL_RADIUS, fg_color=theme.c("main"),
-                                    border_width=1, border_color=theme.c("hover"))
-        self.content.grid(row=0, column=1, sticky="nsew", padx=(G // 2, G), pady=G)
-        self.content.grid_rowconfigure(1, weight=1)
-        self.content.grid_columnconfigure(0, weight=1)
+    def _rebuild_sidebar(self):
+        """Nur die Seitenleiste neu aufbauen (Symbole, Reihenfolge, Kartoffel-Modus): die Seiten bleiben unberührt."""
+        try:
+            self.sidebar.destroy()
+        except Exception:
+            pass
+        self.nav = {}
+        self._build_sidebar(self.root_frame)
+        self._highlight()
+
+    def _rebuild_banner(self):
+        if getattr(self, "banner", None) is not None:
+            try:
+                self.banner.destroy()
+            except Exception:
+                pass
         self._build_banner()
-        # Das Dashboard wird erst beim ersten Anzeigen gebaut (spart beim Neuaufbau nach Einstellungen Zeit).
 
     # ---------- Seitenleiste passt sich der Fensterhöhe an
     COMPACT_LEVELS = ((780, 0), (680, 1), (0, 2))        # (ab Fensterhöhe, Stufe)
@@ -390,16 +488,38 @@ class LauncherApp(ctk.CTk):
     def _on_resize(self, e):
         if e.widget is not self:
             return
+        size = (e.width, e.height)
+        if size == getattr(self, "_last_size", None):          # nur verschoben, nicht in der Größe geändert
+            return
+        self._last_size = size
+        self._last_input = time.monotonic()
         if self._resize_job is not None:
             self.after_cancel(self._resize_job)
-        self._resize_job = self.after(120, self._fit_sidebar)
+        # Während des Ziehens die (teure) Seite ausblenden, danach einmal neu anordnen: flüssiges Vergrößern/Verkleinern
+        if self.settings.get("resize_freeze", True) and self.current in self.pages and not self._frozen:
+            try:
+                self.pages[self.current].grid_remove()
+                self._frozen = True
+            except Exception:
+                pass
+        self._resize_job = self.after(160, self._after_resize)
+
+    def _after_resize(self):
+        self._resize_job = None
+        self._fit_sidebar()
+        if self._frozen:
+            self._frozen = False
+            page = self.pages.get(self.current)
+            if page is not None:
+                try:
+                    page.grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
+                except Exception:
+                    pass
 
     # ---------- Anordnung (Reihenfolge, Sichtbarkeit, Hintergrundbild)
     def layout_items(self) -> list[tuple[str, str]]:
         """Alle verschiebbaren Einträge (Modul-ID, Anzeigename) in der gespeicherten Reihenfolge."""
         names = {p.id: f"{p.icon}  {tr(p.name)}" for p in self.plugins if getattr(p, "nav", True) and (self.is_admin or not getattr(p, "admin_only", False))}
-        names["assistant"] = "💬  " + tr("Help assistant")
-        names["contact"] = "✉  " + tr("Contact")
         return [(i, names[i]) for i in layout.normalize_order(list(names), self.settings.get("nav_order"))]
 
     def nav_entries(self) -> list[tuple[str, str]]:
@@ -416,13 +536,15 @@ class LauncherApp(ctk.CTk):
         if hidden is not None:
             self.settings["nav_hidden"] = list(hidden)
         self.save_settings()
-        self._schedule_rebuild()
+        self._soft_scopes = self._soft_scopes | {"sidebar"}
+        if self._soft_job is None:
+            self._soft_job = self.after(120, self._soft_rebuild)
 
     def _build_banner(self):
         """Eigenes Hintergrundbild als Banner über dem Seiteninhalt (Tk kennt keine durchsichtigen Widgets)."""
         self.banner = None
         path = self.settings.get("bg_image") or ""
-        if not path:
+        if not path or self.settings.get("potato_mode"):
             return
         try:
             h = layout.HEIGHTS.get(self.settings.get("bg_height"), layout.HEIGHTS["Medium"])
@@ -462,10 +584,29 @@ class LauncherApp(ctk.CTk):
         self.ad_box = box
 
     def _add_nav(self, pid: str, label: str, parent=None):
-        btn = ctk.CTkButton(parent or self.sidebar, text=label, anchor="w", height=40, corner_radius=12, fg_color="transparent",
-                            text_color=theme.TEXT, hover_color=theme.c("hover"), command=lambda: self.show(pid))
+        icon, text = None, label
+        col = theme.icon_color(pid) if self.settings.get("colored_icons", True) and not self.settings.get("potato_mode") else None
+        if col and "  " in label:
+            icon, text = label.split("  ", 1)
+        btn = ctk.CTkButton(parent or self.sidebar, text=("\u2003" * 3 + " " + text) if icon else label, anchor="w", height=40, corner_radius=12,
+                            fg_color="transparent", text_color=theme.TEXT, hover=False, command=lambda: self.show(pid))
         btn.pack(fill="x", padx=12, pady=1)
         self.nav[pid] = btn
+        lab = None
+        if icon:
+            lab = ctk.CTkLabel(btn, text=icon, text_color=col, width=22, fg_color="transparent")
+            lab.place(x=12, rely=0.5, anchor="w")
+            lab.bind("<Button-1>", lambda e: self.show(pid))
+            btn._icon_label = lab
+
+        def paint(inside: bool):
+            if pid == self.current or not self.settings.get("hover_effect", True):
+                return
+            colour = theme.hover_tint() if inside else "transparent"
+            btn.configure(fg_color=colour)
+            if lab is not None:
+                lab.configure(fg_color=colour)
+        hover_area(btn, paint, extra=(lab,) if lab is not None else ())
 
     def refresh_user_labels(self):
         if self.user and getattr(self, "user_label", None) is not None and self.user_label.winfo_exists():
@@ -474,6 +615,7 @@ class LauncherApp(ctk.CTk):
             self.dashboard.welcome.configure(text=tr("Welcome, {name}!", name=self.user["display_name"]) + " 👋")
 
     def show(self, pid: str):
+        self._last_input = time.monotonic()
         if self.current in self.pages:
             self.pages[self.current].grid_forget()
         if pid not in self.pages:
@@ -494,26 +636,74 @@ class LauncherApp(ctk.CTk):
         self.pages[pid].grid(row=1, column=0, sticky="nsew", padx=8, pady=8)
         self.current = pid
         self._schedule_prewarm()
+        self._highlight()
+
+    def _highlight(self):
+        pid = self.current
         for k, b in self.nav.items():
             active = k == pid
             b.configure(fg_color=theme.accent() if active else "transparent",
                         text_color=theme.contrast_text(theme.accent()) if active else theme.TEXT)
+            lab = getattr(b, "_icon_label", None)
+            if lab is not None:
+                try:
+                    lab.configure(fg_color=theme.accent() if active else "transparent")
+                except Exception:
+                    pass
 
     # ---------- Einstellungen
     def save_settings(self):
         """Lokal speichern und (bei Cloud-Konto) verschlüsselt in die Datenbank spiegeln (entprellt)."""
-        config.save_settings(self.settings)
+        self._save_job_schedule()
         if self.user is None or getattr(self.identity, "backend", "") != "cloud":
             return
         if self._push_job is not None:
             self.after_cancel(self._push_job)
         self._push_job = self.after(1500, lambda: self.identity.push_settings(self.user, self.settings))
 
+    def _save_job_schedule(self):
+        """Die Datei wird höchstens alle 0,4 s geschrieben (Schieberegler, Farbwahl): weniger Festplattenzugriffe, kein Ruckeln."""
+        self._dirty = True
+        if getattr(self, "_save_job", None) is None:
+            self._save_job = self.after(400, self.flush_settings)
+
+    def flush_settings(self):
+        self._save_job = None
+        if getattr(self, "_dirty", False):
+            self._dirty = False
+            try:
+                config.save_settings(self.settings)
+            except OSError:
+                traceback.print_exc()
+
+    # Welche Einstellung braucht welchen Neuaufbau? Nur Farben/Größe/Sprache erzeugen alle Widgets neu.
+    SOFT_SCOPES = {"colored_icons": "sidebar", "potato_mode": "both", "bg_image": "banner", "bg_dim": "banner", "bg_height": "banner",
+                   "hover_effect": "none"}
+
     def apply_look(self, changes: dict):
         self.settings.update(changes)
         self.save_settings()
         theme.apply(self.settings)
-        self._schedule_rebuild()
+        scopes = {self.SOFT_SCOPES.get(k, "full") for k in changes} or {"full"}
+        scopes.discard("none")                      # z. B. Hover-Effekt: wirkt sofort, braucht keinen Neuaufbau
+        if not scopes:
+            return
+        if "full" in scopes:
+            self._schedule_rebuild()
+            return
+        self._soft_scopes = self._soft_scopes | scopes
+        if self._soft_job is None:
+            self._soft_job = self.after(120, self._soft_rebuild)
+
+    def _soft_rebuild(self):
+        self._soft_job = None
+        scopes, self._soft_scopes = self._soft_scopes, set()
+        if self.user is None or getattr(self, "content", None) is None:
+            return
+        if scopes & {"sidebar", "both"}:
+            self._rebuild_sidebar()
+        if scopes & {"banner", "both"}:
+            self._rebuild_banner()
 
     def set_language(self, code: str):
         self.settings["language"] = code
@@ -532,12 +722,15 @@ class LauncherApp(ctk.CTk):
     PREWARM = ("autoclicker", "gamemacros", "macros", "productivity", "clicktools", "gamer")
 
     def _schedule_prewarm(self):
-        if self._prewarm_job is None:
-            self._prewarm_job = self.after(900, self._prewarm_step)
+        if self._prewarm_job is None and not self.settings.get("potato_mode"):
+            self._prewarm_job = self.after(2500, self._prewarm_step)
 
     def _prewarm_step(self):
         self._prewarm_job = None
         try:
+            if time.monotonic() - self._last_input < 3.0 or self.settings.get("potato_mode"):
+                self._schedule_prewarm()           # nur im Leerlauf vorbauen, nie während man bedient
+                return
             if self.user is None or not self.winfo_exists() or getattr(self, "content", None) is None:
                 return
             shown = {i for i, _ in self.nav_entries()}
@@ -609,6 +802,13 @@ class LauncherApp(ctk.CTk):
             self._set_update_text(tr("You have the latest version."))
 
     # ---------- Beenden
+    def report_callback_exception(self, exc, val, tb):
+        """Fehler in Tk-Rückrufen: wie gewohnt ausgeben und zusätzlich (anonym) melden."""
+        traceback.print_exception(exc, val, tb)
+        self.telemetry.report_exc("ui", exc, val, tb)
+
     def close(self):
+        self.telemetry.stop()
+        self.flush_settings()
         self._shutdown_plugins()
         self.destroy()

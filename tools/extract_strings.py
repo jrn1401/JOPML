@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 HELPERS = {"muted": (1,), "page_title": (1, 2), "card": (1,), "banner": (1,), "_card": (0,), "_field": (1,),
            "ask_text": (1, 2, 3), "show_text": (1,), "confirm": (0, 1), "info": (0, 1)}
-ERRORS = {"AccountError", "CloudError", "AiUnavailable", "ValueError", "GenerateError", "LoopbackError", "RuntimeError", "TotpRequired", "CommunityError", "FilterError", "BackgroundError", "NoReleaseYet"}
+ERRORS = {"AccountError", "CloudError", "AiUnavailable", "ValueError", "GenerateError", "LoopbackError", "RuntimeError", "SpreadError", "TotpRequired", "CommunityError", "FilterError", "BackgroundError", "NoReleaseYet"}
 # publisher: nur für den Admin sichtbar, deshalb bewusst nur Deutsch (nicht übersetzt)
 SKIP_DIRS = {"tests", "tools", "csharp", "supabase", ".github", "server_examples", "publisher"}
 
@@ -119,10 +119,31 @@ def from_constants() -> set[str]:
         out.update([label, text])
     from modules.clicktools import crosshair as ct_cross2
     out.update(ct_cross2.REACTIONS)
+    out.update(ct_cross2.COVER_SHAPES)
+    out.update(["Cover size", "Cover line width (Cross)", "Spread when shooting (px)", "Opens in (ms)", "Closes in (ms)"])
+    # 1.6.0: Hotkey-Verwaltung (Beschriftungen und Gruppen werden beim Anzeigen mit tr() übersetzt), Overlay-Schalter, Tabs
+    out.update(["Emergency stop", "General", "Autoclicker", "My macros", "Gaming & Stream", "Game macros", "Game macros (stop key)", "Crosshair",
+                "Crosshair: show / hide", "Crosshair: next profile", "Autoclicker: Start", "Autoclicker: Stop", "My macros: Start / Stop",
+                "Screenshot of a region", "Match: count a win", "Match: count a loss", "Match: count a kill", "Match: count a death",
+                "Match: next round", "Stop all timers", "Notes: next map", "Show / hide all overlays",
+                "Show the match overlay", "Show the timer overlay", "Show the notes overlay", "Show the network overlay",
+                "Match counter", "Timers", "Notes", "Network", "+ Win", "+ Loss", "+ Kill", "+ Death", "+ Round"])
+    out.update(f"Start timer {i} (restarts it)" for i in range(1, 7))
+    out.update(["New announcement", "New macro in the marketplace", "No pop-ups or sounds while a program is fullscreen (a summary follows afterwards)",
+                "Show community messages even when the Community page is closed or locked"])
     import importlib
     for mod in ("autoclicker", "macros", "extensions", "recoil", "community", "clicktools", "gamemacros", "gamer", "productivity"):
         p = importlib.import_module(f"modules.{mod}.plugin").Plugin
         out.update((p.name, p.description))
+    # 1.7.0: Admin-Modul (Beschriftungen laufen über Variablen)
+    from modules.admin import logic as a_logic
+    out.update(["Admin", "Overview", "Accounts", "Errors", "Publish",
+                "Server overview, accounts, error reports and publishing. Only visible for admin accounts.",
+                "Server overview, accounts, error reports and publishing (admin only).",
+                "Server is running normally.", "Almost all database connections are in use.",
+                "The database is almost full (free plan: 500 MB).", "Low cache hit rate – the server may be short on memory.",
+                "No answer from the server."])
+    out.update(label for label, _ in a_logic.summarize({}))
     return out
 
 

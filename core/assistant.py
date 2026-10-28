@@ -15,6 +15,13 @@ from core.i18n import tr
 from core.version import APP_ID, APP_VERSION
 
 FAQ = [
+    (("lag", "laggt", "langsam", "slow", "ruckelt", "potato", "kartoffel", "weak pc", "schwacher pc", "performance"),
+     "If the program is slow or lags, switch on Potato mode in Settings > Performance (turns off background picture, coloured icons, "
+     "pre-building of pages and slows polling). Also keep 'Hide the page while resizing the window' on and lower the interface size in Appearance."),
+    (("admin", "online users", "wer ist online", "fehlermeldungen", "error reports", "server status"),
+     "Admin accounts have the menu 'Admin' with Overview (users online, accounts, server and database status), Accounts, Errors and Publish."),
+    (("farbwechsel", "color change", "colour change", "farbe ändert", "pixel"),
+     "Autoclicker > Colour trigger: switch on 'Trigger on any colour change' to start the macro when the watched point changes colour at all."),
     (("hotkey", "f6", "tastenkombination", "global", "hintergrund", "background", "shortcut key"),
      "Set start/stop hotkeys in 'Jaron Op Makro' under 'Global hotkeys': click 'Record' and press the key or combination "
      "(e.g. F6 or Ctrl+Alt+P). If start and stop are the same, the key toggles. Hotkeys also work when the window is in the background."),
@@ -28,11 +35,11 @@ FAQ = [
     (("profil", "profile", "speichern", "save", "laden", "load", "json"),
      "Save and load profiles at the top of 'Jaron Op Makro' with 'Save …' and 'Load …'. They are plain JSON files you can share."),
     (("makro", "macro", "skript", "script", "ki", "ai", "generieren", "generate", "beschreib", "describe"),
-     "Open 'Add macros'. Write commands such as 'click left 500 300', 'wait 50ms' and 'repeat forever … end', or describe the macro "
+     "Open 'My macros'. Write commands such as 'click left 500 300', 'wait 50ms' and 'repeat forever … end', or describe the macro "
      "in the box on top (e.g. 'click every 50 ms at 500 300') and press 'Generate'. Simple sentences are understood offline; harder ones "
      "use the AI when you are signed in with a cloud account. Every macro is checked before it runs. F7 starts/stops."),
     (("extension", "erweiterung", "browser", "browsing", "links", "notiz", "notes", "suche", "search"),
-     "Under 'Browsing / Extensions' add ready-made extensions (Quick links, Web search, Notes) with one click, switch them on or off and configure them there."),
+     "Under 'Extensions' add ready-made extensions (Quick links, Web search, Notes) with one click, switch them on or off and configure them there."),
     (("recoil", "rückstoß", "rueckstoss", "shooter", "anti-recoil", "ruckstoss"),
      "The 'Recoil' module pulls the mouse down while the left button is held. It can very easily be detected by anti-cheat systems and is meant "
      "only for offline games for education and testing. You must confirm the warning before it can be switched on. F8 toggles it."),
@@ -66,6 +73,14 @@ FAQ = [
      "There is no GPU limit because the program does not use the graphics card."),
     (("werbung", "ads", "advert", "banner"),
      "The ad box in the sidebar is a placeholder. No ads are loaded at the moment."),
+    (("match", "sieg", "niederlage", "gewonnen", "verloren", "win", "loss", "victory", "defeat", "automatisch zählen", "auto detect"),
+     "Under Gamer & Stream → Match counter you can let the program count wins and losses itself: choose the screen area around the 'Victory' / 'Defeat' text, "
+     "teach it your victory and your defeat screen with the 'Learn' buttons, then switch on 'Count wins and losses automatically'. Only screen colours are compared; nothing is read from the game."),
+    (("monitor", "zweiter bildschirm", "second screen", "mehrere monitore", "fenster verschieben", "fenster layout", "window layout"),
+     "Under Productivity → Windows you can pick a target monitor, send the last used window to the next monitor (Ctrl+Alt+M) and save the open windows with their exact position and monitor "
+     "as a layout. In a layout, 'discord:right@2' puts Discord on monitor 2 (counted from left to right)."),
+    (("overlay bleibt", "overlays bleiben", "overlay nach neustart", "overlay after restart", "overlays stay"),
+     "Overlays that were switched on when you closed the program come back automatically at the next start."),
     (("kontakt", "contact", "feedback", "fehler melden", "bug", "idee", "idea", "vorschlag"),
      "Send feedback and bug reports through 'Contact' in the sidebar."),
 ]

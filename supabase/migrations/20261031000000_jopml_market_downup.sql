@@ -1,5 +1,6 @@
--- JOPML 1.5.0+: Der Marktplatz akzeptiert die Makro-Befehle "down" und "up" (Taste/Maustaste gedrückt halten / loslassen).
+-- JOPML 1.5.0+: Der Marktplatz akzeptiert alle Befehle der Makro-Sprache, auch "down" und "up" (Taste/Maustaste gedrückt halten / loslassen).
 -- Vorher lehnte der Server solche Makros mit 'invalid_script' ab, obwohl der Launcher sie seit 1.5.0 kennt.
+-- Seit 1.7.0 zusätzlich: Variablen und Bedingungen (set, add, if, else, stop).
 -- Zufällige Wartezeiten ("wait 100ms-300ms") waren schon erlaubt, weil nur das erste Wort geprüft wird.
 create or replace function public.jopml_m_script_ok(s text) returns boolean
 language plpgsql immutable set search_path = '' as $$
@@ -11,7 +12,7 @@ begin
     n := n + 1;
     if n > 600 then return false; end if;
     if ln = '' or left(ln, 1) = '#' then continue; end if;
-    if ln !~* '^(click|doubleclick|move|key|hold|down|up|type|scroll|wait|repeat|end)(\s|$)' then return false; end if;
+    if ln !~* '^(click|doubleclick|move|key|hold|down|up|type|scroll|wait|repeat|end|set|add|if|else|stop)(\s|$)' then return false; end if;
   end loop;
   return true;
 end $$;

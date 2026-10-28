@@ -32,16 +32,24 @@ def check(path: str) -> None:
         raise BackgroundError("This file is not a readable image.") from None
 
 
+_CACHE: dict = {}          # (Pfad, Änderungszeit, Breite, Höhe) -> zugeschnittenes Bild (ohne Abdunkeln)
+
+
 def render(path: str, width: int, height: int, dim: int = 40) -> Image.Image:
-    """Bild so skalieren, dass es die Fläche füllt (mittig zugeschnitten), und um `dim` Prozent abdunkeln."""
+    """Bild so skalieren, dass es die Fläche füllt (mittig zugeschnitten), und um `dim` Prozent abdunkeln.
+    Das aufwendige Skalieren wird zwischengespeichert: ein Neuaufbau der Oberfläche liest und skaliert das Bild nicht jedes Mal neu."""
     check(path)
-    with Image.open(path) as im:
-        im = im.convert("RGB")
-    scale = max(width / im.width, height / im.height)
-    im = im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))), Image.LANCZOS)
-    left, top = (im.width - width) // 2, (im.height - height) // 2
-    im = im.crop((left, top, left + width, top + height))
+    key = (path, os.path.getmtime(path), width, height)
+    base = _CACHE.get(key)
+    if base is None:
+        with Image.open(path) as im:
+            im = im.convert("RGB")
+        scale = max(width / im.width, height / im.height)
+        im = im.resize((max(1, round(im.width * scale)), max(1, round(im.height * scale))), Image.LANCZOS)
+        left, top = (im.width - width) // 2, (im.height - height) // 2
+        base = im.crop((left, top, left + width, top + height))
+        if len(_CACHE) >= 3:
+            _CACHE.pop(next(iter(_CACHE)))
+        _CACHE[key] = base
     dim = max(0, min(80, int(dim)))
-    if dim:
-        im = ImageEnhance.Brightness(im).enhance(1 - dim / 100)
-    return im
+    return ImageEnhance.Brightness(base).enhance(1 - dim / 100) if dim else base.copy()

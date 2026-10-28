@@ -75,22 +75,48 @@ def shade(color: str, factor: float) -> str:
     return "#%02x%02x%02x" % tuple(max(0, min(255, int(v * factor))) for v in (r, g, b))
 
 
+def mix(a: str, b: str, t: float) -> str:
+    """Mischt zwei Hex-Farben: t=0 ergibt a, t=1 ergibt b."""
+    ra = [int(a[i:i + 2], 16) for i in (1, 3, 5)]
+    rb = [int(b[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#%02x%02x%02x" % tuple(round(x + (y - x) * t) for x, y in zip(ra, rb))
+
+
+def hover_tint():
+    """Leicht hervorgehobener Hintergrund beim Darüberfahren: Farbe der Seitenleiste mit etwas Akzent (hell, dunkel)."""
+    base = c("sidebar")
+    base = base if isinstance(base, (tuple, list)) else (base, base)
+    return tuple(mix(x, _accent, 0.18) if is_hex(x) else x for x in base[:2])
+
+
 def contrast_text(bg: str) -> str:
     r, g, b = (int(bg[i:i + 2], 16) for i in (1, 3, 5))
     return "#111111" if (0.299 * r + 0.587 * g + 0.114 * b) > 150 else "#ffffff"
+
+
+_last_scale = None
+_last_mode = None
 
 
 def apply(settings: dict) -> None:
     """Setzt Modus, Akzent und eigene Farben. Wirkt auf danach erzeugte Widgets (die App baut ihre Oberfläche neu auf)."""
     global _accent, MUTED, TEXT
     mode = settings.get("appearance_mode", "dark")
+    global _last_scale, _last_mode
+    from core import perf
+    perf.set_potato(settings.get("potato_mode", False))
     try:
         scale = max(80, min(150, int(settings.get("ui_scale", 100)))) / 100
-        ctk.set_widget_scaling(scale)
-        ctk.set_window_scaling(scale)
+        if scale != _last_scale:                 # nur bei Änderung: jeder Aufruf löst sonst ein Neuzeichnen aller Widgets aus
+            ctk.set_widget_scaling(scale)
+            ctk.set_window_scaling(scale)
+            _last_scale = scale
     except (TypeError, ValueError, AttributeError):
         pass
-    ctk.set_appearance_mode(mode if mode in ("dark", "light", "system") else "dark")
+    mode = mode if mode in ("dark", "light", "system") else "dark"
+    if mode != _last_mode:
+        ctk.set_appearance_mode(mode)
+        _last_mode = mode
     acc = settings.get("accent", DEFAULT_ACCENT)
     _accent = acc if is_hex(acc) else DEFAULT_ACCENT
 
@@ -136,3 +162,16 @@ def apply(settings: dict) -> None:
                     ctk.ThemeManager.theme[widget][key] = [value, value]
     except Exception as exc:     # Farbanpassung ist nur Kosmetik
         print("Theme konnte nicht angepasst werden:", exc)
+
+
+# Farben der Menü-Symbole (abschaltbar unter Einstellungen > Aussehen)
+ICON_COLORS = {
+    "dashboard": "#4aa3ff", "autoclicker": "#ff6b6b", "gamemacros": "#a66bff", "macros": "#4cd1a0",
+    "productivity": "#ffd23f", "clicktools": "#ff9f43", "gamer": "#6bff8e", "community": "#5ac8fa",
+    "extensions": "#c58bff", "publisher": "#ff7ab8", "admin": "#ff5d5d", "recoil": "#ffb36b",
+    "assistant": "#7ad7ff", "contact": "#ffc857", "settings": "#b0b8c4",
+}
+
+
+def icon_color(pid: str):
+    return ICON_COLORS.get(pid)

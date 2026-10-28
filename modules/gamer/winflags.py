@@ -37,3 +37,14 @@ def keep_on_top(win) -> None:
         ctypes.windll.user32.SetWindowPos(_hwnd(win), HWND_TOPMOST, 0, 0, 0, 0, SWP_FLAGS)
     except Exception:
         pass
+
+
+def exclude_from_capture(win, on: bool) -> None:
+    """Streamer-Modus: Das Fenster erscheint nicht in Bildschirmaufnahmen und Streams (SetWindowDisplayAffinity, Windows 10 Version 2004 oder neuer)."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ctypes.windll.user32.SetWindowDisplayAffinity(_hwnd(win), 0x11 if on else 0)     # WDA_EXCLUDEFROMCAPTURE | WDA_NONE
+    except Exception:
+        pass

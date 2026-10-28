@@ -22,7 +22,7 @@ class ExtensionsPage(ctk.CTkScrollableFrame):
         for w in self.winfo_children():
             w.destroy()
         if not self.embedded:
-            ui.page_title(self, "Browsing / Extensions",
+            ui.page_title(self, "Extensions",
                           "Add an extension with one click, switch it on or off and set it up.").grid(
                 row=0, column=0, sticky="w", padx=24, pady=(20, 8))
         for i, ext in enumerate(catalog.CATALOG, start=1):

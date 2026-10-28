@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MIGRATIONS = [
     "20261026000000_jopml_init.sql", "20261026000200_jopml_pseudo_mail.sql", "20261028000000_jopml_layout_settings.sql",
     "20261028000100_jopml_filter.sql", "20261028000200_jopml_community.sql", "20261028000300_jopml_name_filter.sql",
+    "20261028201220_jopml_admin_overview.sql",
     "20261029000000_jopml_modtools.sql", "20261030000000_jopml_market.sql", "20261030000100_jopml_email_invite.sql",
     "20261031000000_jopml_market_downup.sql",
 ]

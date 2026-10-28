@@ -15,7 +15,8 @@ from pathlib import Path
 
 from core import config
 
-EVENTS = {"chat": "New chat messages", "mention": "Mentions and replies", "invite": "Invitations", "timer": "Timer reminders"}
+EVENTS = {"chat": "New chat messages", "dm": "Direct messages", "mention": "Mentions and replies", "invite": "Invitations",
+          "news": "Announcements from the operator", "market": "New macros in the marketplace", "timer": "Timer reminders"}
 SOUNDS = ["System beep", "Chime", "Pop", "Ding", "Custom file", "Off"]
 POSITIONS = ["Top right", "Top left", "Bottom right", "Bottom left"]
 _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -38,9 +39,14 @@ class Prefs:
     quiet: bool = False
     quiet_from: str = "22:00"
     quiet_to: str = "07:00"
+    dnd_fullscreen: bool = True     # „Nicht stören“: im Vollbild (Spiel, Film) keine Pop-ups und Töne; danach eine Zusammenfassung
+    community_background: bool = False   # Community-Meldungen auch, wenn die Community-Seite nicht geöffnet/entsperrt ist (fragt alle 60 s ab)
+    muted_servers: list = field(default_factory=list)   # IDs von Servern, von denen nichts gemeldet wird
 
     def clamp(self) -> "Prefs":
         self.enabled, self.popup, self.quiet = bool(self.enabled), bool(self.popup), bool(self.quiet)
+        self.dnd_fullscreen, self.community_background = bool(self.dnd_fullscreen), bool(self.community_background)
+        self.muted_servers = [str(x)[:64] for x in (self.muted_servers if isinstance(self.muted_servers, list) else [])][:200]
         self.sound = self.sound if self.sound in SOUNDS else "Chime"
         self.custom_path = str(self.custom_path or "")[:500]
         self.volume = max(0, min(100, int(self.volume)))
@@ -62,13 +68,13 @@ class Prefs:
             for k, v in d.items():
                 if k in p.__dict__:
                     try:
-                        setattr(p, k, v if k == "events" else type(getattr(p, k))(v))
+                        setattr(p, k, v if k in ("events", "muted_servers") else type(getattr(p, k))(v))
                     except (TypeError, ValueError):
                         pass
         return p.clamp()
 
     def to_dict(self) -> dict:
-        return dict(self.__dict__, events=dict(self.events))
+        return dict(self.__dict__, events=dict(self.events), muted_servers=list(self.muted_servers))
 
 
 def in_quiet_hours(p: Prefs, now: datetime.datetime) -> bool:
@@ -146,6 +152,11 @@ def play_file(f: Path, volume: int = 100) -> None:
         pass
 
 
+def _fullscreen_default() -> bool:
+    from core import winutil
+    return winutil.fullscreen_active()
+
+
 # ---------------------------------------------------------------- Pop-up
 TOAST_WIDTH, TOAST_KEY, MAX_TOAST_TEXT = 340, "#010203", 600
 
@@ -158,9 +169,15 @@ def round_rect_points(x0: float, y0: float, x1: float, y1: float, r: float) -> l
 
 
 class Notifier:
-    def __init__(self, app):
+    def __init__(self, app, fullscreen=None):
         self.app = app
         self._toasts: list = []
+        self._held: list[tuple[str, str]] = []           # Meldungen, die im Vollbild zurückgehalten wurden
+        self._hold_job = None
+        self._fullscreen = fullscreen or _fullscreen_default
+
+    def server_allowed(self, space_id: str) -> bool:
+        return str(space_id) not in self.prefs().muted_servers
 
     def prefs(self) -> Prefs:
         return Prefs.from_dict(self.app.settings.get("notify"))
@@ -170,6 +187,9 @@ class Notifier:
         p = self.prefs()
         if not force and not should_notify(p, event):
             return False
+        if not force and p.dnd_fullscreen and self._fullscreen():
+            self._hold(title, text)
+            return False
         if p.enabled or force:
             self.play(p)
             if p.popup:
@@ -178,6 +198,38 @@ class Notifier:
                 except Exception:
                     pass
         return True
+
+    def _hold(self, title: str, text: str) -> None:
+        """Im Vollbild nichts anzeigen; sobald es endet, kommt eine einzige Zusammenfassung."""
+        if len(self._held) < 20:
+            self._held.append((title, text))
+        if self._hold_job is None:
+            try:
+                self._hold_job = self.app.after(4000, self._release_held)
+            except Exception:
+                self._hold_job = None
+
+    def _release_held(self) -> None:
+        self._hold_job = None
+        if self._fullscreen():
+            try:
+                self._hold_job = self.app.after(4000, self._release_held)
+            except Exception:
+                pass
+            return
+        held, self._held = self._held, []
+        if not held:
+            return
+        from core.i18n import tr
+        title = tr("{n} notifications while you were in fullscreen", n=len(held))
+        text = "\n".join(t for t, _x in held[:5])
+        p = self.prefs()
+        self.play(p)
+        if p.popup:
+            try:
+                self._toast(p, title, text)
+            except Exception:
+                pass
 
     def play(self, p: Prefs | None = None) -> None:
         p = p or self.prefs()

@@ -9,6 +9,8 @@ from tkinter import colorchooser, filedialog, messagebox
 
 import customtkinter as ctk
 
+from core.tabbar import WrapTabs
+
 from core import accounts, appicon, background, config, i18n, layout, shortcuts, system_limits, theme, ui
 from core.credits import CREDITS
 from core.i18n import LANGS, tr
@@ -18,7 +20,7 @@ from core.login_view import days_to_setting, default_days, remember_label, remem
 from core.version import APP_NAME, APP_VERSION, LEGAL_VERSION
 
 SCALES = [80, 90, 100, 110, 125, 150]
-SECTIONS = ["Account", "Appearance", "Layout", "Language", "System", "Notifications", "Performance", "Legal & sources"]
+SECTIONS = ["Account", "Appearance", "Layout", "Language", "System", "Notifications", "Hotkeys", "Performance", "Legal & sources"]
 
 
 class SettingsView(ctk.CTkFrame):
@@ -28,8 +30,8 @@ class SettingsView(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
         ui.page_title(self, "Settings").grid(row=0, column=0, sticky="w", padx=24, pady=(20, 8))
-        self.seg = ctk.CTkSegmentedButton(self, values=[tr(s) for s in SECTIONS], command=self._open)
-        self.seg.grid(row=1, column=0, sticky="w", padx=24, pady=(0, 6))
+        self.seg = WrapTabs(self, [tr(s) for s in SECTIONS], self._open)
+        self.seg.grid(row=1, column=0, sticky="ew", padx=24, pady=(0, 2))
         self.area = None
         start = app.settings_section if app.settings_section in SECTIONS else "Account"
         self.seg.set(tr(start))
@@ -228,6 +230,12 @@ class SettingsView(ctk.CTkFrame):
     def _s_appearance(self):
         s = self.app.settings
         body = self._card("Theme")
+        iv = tk.BooleanVar(value=bool(s.get("colored_icons", True)))
+        ctk.CTkSwitch(body, text=tr("Coloured menu icons (e.g. yellow ⚡ for Productivity)"), variable=iv,
+                      command=lambda: self.app.apply_look({"colored_icons": iv.get()})).pack(anchor="w", pady=(0, 6))
+        hv = tk.BooleanVar(value=bool(s.get("hover_effect", True)))
+        ctk.CTkSwitch(body, text=tr("Highlight modules when the mouse is over them"), variable=hv,
+                      command=lambda: self.app.apply_look({"hover_effect": hv.get()})).pack(anchor="w", pady=(0, 6))
         r = ctk.CTkFrame(body, fg_color="transparent")
         r.pack(fill="x", pady=4)
         ctk.CTkLabel(r, text=tr("Mode"), width=170, anchor="w").pack(side="left")
@@ -558,6 +566,165 @@ class SettingsView(ctk.CTkFrame):
             return False
 
     # ======================= Leistung =======================
+    # ======================= Hotkeys =======================
+    def _s_hotkeys(self):
+        from tkinter import filedialog
+        from core import hotkey_registry as hr
+        from modules.autoclicker import keys as kcap
+        reg = self.app.hotkeys
+        top = self._card("Hotkeys")
+        ui.muted(top, "All shortcuts of the app in one place. Click “Change”, then press the new key combination (Esc = cancel). "
+                      "Red = the same key is used twice. A program name (part of the window title) makes a shortcut work only in that program.").pack(fill="x", pady=(0, 6))
+        search_row = ctk.CTkFrame(top, fg_color="transparent")
+        search_row.pack(fill="x", pady=2)
+        search = ctk.CTkEntry(search_row, width=260, placeholder_text=tr("Search …"))
+        search.pack(side="left")
+        msg = self._msg(top)
+        listbox = self._card("Shortcuts")
+        state = {"cap": None}
+
+        def stop_capture():
+            if state["cap"] is not None:
+                state["cap"].cancel()
+                state["cap"] = None
+
+        def render(*_):
+            stop_capture()
+            for w in listbox.winfo_children():
+                w.destroy()
+            needle = search.get().strip().lower()
+            clash = reg.conflicts()
+            clash_ids = {i for ids in clash.values() for i in ids}
+            groups: dict[str, list] = {}
+            for i, e in reg.entries.items():
+                if needle and needle not in (tr(e.label) + " " + tr(e.group)).lower() and needle not in reg.key_of(i).lower():
+                    continue
+                groups.setdefault(e.group, []).append(i)
+            if not groups:
+                ui.muted(listbox, "Nothing found.").pack(fill="x")
+            for g in sorted(groups):
+                ctk.CTkLabel(listbox, text=tr(g), font=ctk.CTkFont(weight="bold"), anchor="w").pack(fill="x", pady=(8, 2))
+                for i in groups[g]:
+                    row_for(i, i in clash_ids)
+
+        def row_for(i, bad):
+            e = reg.entries[i]
+            r = ctk.CTkFrame(listbox, fg_color="transparent")
+            r.pack(fill="x", pady=2)
+            if not e.external:
+                var = ctk.BooleanVar(value=reg.enabled(i))
+                ctk.CTkSwitch(r, text="", width=40, variable=var,
+                              command=lambda i=i, v=var: (reg.set_enabled(i, v.get()), render())).pack(side="left")
+            else:
+                ctk.CTkLabel(r, text="", width=46).pack(side="left")
+            ctk.CTkLabel(r, text=tr(e.label), width=230, anchor="w").pack(side="left")
+            key = ctk.CTkLabel(r, text=hr.pretty(reg.key_of(i)), width=170, corner_radius=6, fg_color=theme.c("inset"),
+                               text_color=theme.DANGER if bad else theme.TEXT)
+            key.pack(side="left", padx=4)
+
+            def change(i=i, key=key):
+                stop_capture()
+                key.configure(text=tr("Press keys …"), text_color=theme.TEXT)
+
+                holder = {}
+
+                def done(result, i=i):
+                    def apply():
+                        if state["cap"] is not holder.get("cap"):
+                            return                                  # eine neuere Aufnahme läuft schon
+                        state["cap"] = None
+                        if result:
+                            err = reg.set_key(i, result)
+                            self._say(msg, err or tr("Saved."), not err)
+                        render()
+                    self.app.call_soon(apply)
+                try:
+                    holder["cap"] = state["cap"] = kcap.KeyCapture(done, combo=True)
+                    state["cap"].start()
+                except Exception as exc:
+                    self._say(msg, str(exc), False)
+            ctk.CTkButton(r, text=tr("Change"), width=80, command=change).pack(side="left", padx=2)
+            ctk.CTkButton(r, text="↺", width=30, fg_color=theme.c("hover"), text_color=theme.TEXT,
+                          command=lambda i=i: (reg.reset(i), render())).pack(side="left", padx=2)
+            if e.windowed and not e.external:
+                w = ctk.CTkEntry(r, width=130, placeholder_text=tr("any program"))
+                w.insert(0, reg.window_of(i))
+                w.pack(side="left", padx=6)
+                w.bind("<FocusOut>", lambda _e, i=i, w=w: reg.set_window(i, w.get()))
+                w.bind("<Return>", lambda _e, i=i, w=w: (reg.set_window(i, w.get()), render()))
+
+        search.bind("<KeyRelease>", render)
+        tools = self._card("Profiles & backup")
+        ui.muted(tools, "Save the current assignment as a profile (for example one per game) and load it later. Export/Import writes a file you can share.").pack(fill="x", pady=(0, 4))
+        r = ctk.CTkFrame(tools, fg_color="transparent")
+        r.pack(fill="x", pady=2)
+        names = sorted(self.app.settings.get("hotkey_profiles", {}))
+        pm = ctk.CTkOptionMenu(r, values=names or ["–"], width=180)
+        pm.set(names[0] if names else "–")
+        pm.pack(side="left")
+
+        def load_profile():
+            n = pm.get()
+            if n in self.app.settings.get("hotkey_profiles", {}):
+                cnt = reg.load_profile(n)
+                self._say(msg, tr("{n} shortcuts loaded.", n=cnt))
+                render()
+        ctk.CTkButton(r, text=tr("Load"), width=80, command=load_profile).pack(side="left", padx=6)
+
+        def delete_profile():
+            n = pm.get()
+            if n in self.app.settings.get("hotkey_profiles", {}):
+                reg.delete_profile(n)
+                self._open(tr("Hotkeys"))
+        ctk.CTkButton(r, text=tr("Delete"), width=80, fg_color=theme.c("hover"), text_color=theme.TEXT, command=delete_profile).pack(side="left")
+        r = ctk.CTkFrame(tools, fg_color="transparent")
+        r.pack(fill="x", pady=4)
+        name = ctk.CTkEntry(r, width=180, placeholder_text=tr("Profile name"))
+        name.pack(side="left")
+
+        def save_profile():
+            err = reg.save_profile(name.get())
+            self._say(msg, err or tr("Saved."), not err)
+            if not err:
+                self._open(tr("Hotkeys"))
+        ctk.CTkButton(r, text=tr("Save profile"), width=120, command=save_profile).pack(side="left", padx=6)
+        r = ctk.CTkFrame(tools, fg_color="transparent")
+        r.pack(fill="x", pady=4)
+
+        def export():
+            f = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")], initialfile="jopml-hotkeys.json")
+            if f:
+                import json
+                try:
+                    with open(f, "w", encoding="utf-8") as fh:
+                        json.dump(reg.snapshot(), fh, indent=2, ensure_ascii=False)
+                    self._say(msg, tr("Saved."))
+                except OSError as exc:
+                    self._say(msg, str(exc), False)
+
+        def import_():
+            f = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
+            if f:
+                import json
+                try:
+                    with open(f, encoding="utf-8") as fh:
+                        n = reg.load_snapshot(json.load(fh))
+                    self._say(msg, tr("{n} shortcuts loaded.", n=n))
+                    render()
+                except (OSError, ValueError) as exc:
+                    self._say(msg, str(exc), False)
+
+        def reset_all():
+            reg.reset()
+            self._say(msg, tr("Reset to the defaults."))
+            render()
+        ctk.CTkButton(r, text=tr("Export …"), width=100, command=export).pack(side="left")
+        ctk.CTkButton(r, text=tr("Import …"), width=100, command=import_).pack(side="left", padx=6)
+        ctk.CTkButton(r, text=tr("Reset all to default"), width=170, fg_color="#c0392b", hover_color="#962d22", command=reset_all).pack(side="left")
+        if reg.error:
+            self._say(msg, reg.error, False)
+        render()
+
     # ======================= Benachrichtigungen =======================
     def _s_notifications(self):
         from core import notify
@@ -637,6 +804,38 @@ class SettingsView(ctk.CTkFrame):
         sw_col.configure(command=pick_color)
         sw_col.pack(side="left")
         ctk.CTkButton(r, text=tr("Reset"), width=80, fg_color="gray40", command=reset_color).pack(side="left", padx=8)
+        dn = self._card("Do not disturb & community")
+        switch(dn, "dnd_fullscreen", "No pop-ups or sounds while a program is fullscreen (a summary follows afterwards)", p.dnd_fullscreen)
+        switch(dn, "community_background", "Show community messages even when the Community page is closed or locked", p.community_background)
+        ui.muted(dn, "With this on, the launcher asks the server every minute for new messages, invitations, announcements and marketplace macros "
+                     "(only that something is new – nothing is decrypted). Needs a cloud account.").pack(fill="x", pady=(0, 6))
+        muted = set(p.muted_servers)
+        mute_vars = {}
+        com = self.app.plugin_by_id.get("community")
+        svc = getattr(com, "_svc", None) if com is not None else None
+        spaces = [sp for sp in (getattr(svc, "spaces", None) or []) if sp.get("kind") == "server"]
+        if not spaces:                                   # ohne Anmeldung: zuletzt bekannte Server aus dem Zwischenspeicher
+            spaces = [sp for sp in (self.app.settings.get("community_cache") or []) if sp.get("id")]
+        ctk.CTkLabel(dn, text=tr("Servers that may notify you"), font=ctk.CTkFont(weight="bold"), anchor="w").pack(fill="x", pady=(6, 2))
+        if spaces:
+            for sp in spaces:
+                mute_vars[sp["id"]] = ctk.BooleanVar(value=sp["id"] not in muted)
+                ctk.CTkSwitch(dn, text=sp.get("name", ""), variable=mute_vars[sp["id"]]).pack(anchor="w", pady=2)
+        else:
+            ui.muted(dn, "Open the Community page once to list your servers here.").pack(fill="x")
+        cs = self._card("Community sign-in")
+        ui.muted(cs, "You can change these settings without being signed in to the Community.").pack(fill="x", pady=(0, 4))
+        stay = ctk.BooleanVar(value=bool(self.app.settings.get("community_stay")))
+
+        def on_stay():
+            if com is not None:
+                com.set_stay(stay.get())
+            else:
+                self.app.settings["community_stay"] = stay.get()
+                self.app.save_settings()
+        ctk.CTkSwitch(cs, text=tr("Stay signed in to the Community on this computer"), variable=stay, command=on_stay).pack(anchor="w", pady=3)
+        ui.muted(cs, "The passphrase is remembered on this computer (on Windows bound to your Windows account), so the Community opens "
+                     "without asking. Turn this off on shared computers.").pack(fill="x")
         qh = self._card("Quiet hours")
         switch(qh, "quiet", "Mute during quiet hours", p.quiet)
         e_from = self._field(qh, tr("From (HH:MM)"), p.quiet_from, width=80)
@@ -649,13 +848,17 @@ class SettingsView(ctk.CTkFrame):
                 "volume": int(sl_vol.get()), "popup": v["popup"].get(), "position": back(m_pos, notify.POSITIONS),
                 "duration": e_dur.get().strip() or 5, "opacity": int(sl_op.get()), "color": col["v"],
                 "events": {k: v["ev_" + k].get() for k in notify.EVENTS},
-                "quiet": v["quiet"].get(), "quiet_from": e_from.get().strip(), "quiet_to": e_to.get().strip()})
+                "quiet": v["quiet"].get(), "quiet_from": e_from.get().strip(), "quiet_to": e_to.get().strip(),
+                "dnd_fullscreen": v["dnd_fullscreen"].get(), "community_background": v["community_background"].get(),
+                "muted_servers": sorted(({x for x in muted} - set(mute_vars)) | {i for i, var in mute_vars.items() if not var.get()})})
             return d
 
         def save():
             d = collect()
             self.app.settings["notify"] = d.to_dict()
             self.app.save_settings()
+            if com is not None and hasattr(com, "apply_background"):
+                com.apply_background()
             self._say(msg, tr("Saved."), True)
 
         def test_sound():
@@ -672,8 +875,21 @@ class SettingsView(ctk.CTkFrame):
 
 
     def _s_performance(self):
-        body = self._card("Performance & throttling")
         s = self.app.settings
+        body = self._card("Potato mode")
+        ui.muted(body, "For weak PCs: turns off the background picture, coloured icons and pre-building of pages, and polls overlays, cross-hair and window tracking three times less often.").pack(fill="x", pady=(0, 6))
+        pv = tk.BooleanVar(value=bool(s.get("potato_mode")))
+        ctk.CTkSwitch(body, text=tr("Potato mode"), variable=pv,
+                      command=lambda: self.app.apply_look({"potato_mode": pv.get()})).pack(anchor="w", pady=3)
+        fv = tk.BooleanVar(value=bool(s.get("resize_freeze", True)))
+        ctk.CTkSwitch(body, text=tr("Hide the page while resizing the window (smoother)"), variable=fv,
+                      command=lambda: (s.update({"resize_freeze": fv.get()}), self.app.save_settings())).pack(anchor="w", pady=3)
+        body = self._card("Diagnostics")
+        ui.muted(body, "Sends one sign of life per minute (version, operating system, open page) and error messages without personal data to the developer, so problems can be found and fixed. Cloud accounts only.").pack(fill="x", pady=(0, 6))
+        dv = tk.BooleanVar(value=bool(s.get("diagnostics", True)))
+        ctk.CTkSwitch(body, text=tr("Send anonymous diagnostics"), variable=dv,
+                      command=lambda: (s.update({"diagnostics": dv.get()}), self.app.save_settings())).pack(anchor="w", pady=3)
+        body = self._card("Performance & throttling")
         ram, cores = system_limits.total_ram_mb(), system_limits.cpu_count()
         self.info = ctk.CTkLabel(body, text_color=theme.MUTED, anchor="w", justify="left", wraplength=620)
         self.info.pack(fill="x", pady=(0, 6))

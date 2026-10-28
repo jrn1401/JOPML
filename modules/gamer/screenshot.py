@@ -43,6 +43,7 @@ class RegionSelector:
 
     def __init__(self, app, on_done):
         self.app, self.on_done = app, on_done
+        self.box = None           # gewählter Bereich (links, oben, rechts, unten) in Bildschirmpixeln, gesetzt vor on_done
 
     def start(self):
         import tkinter as tk
@@ -75,6 +76,7 @@ class RegionSelector:
             box = normalize_box(st["x"], st["y"], e.x, e.y, scale, shot.size)
             w.destroy()
             if box:
+                self.box = box
                 self.on_done(shot.crop(box))
         c.bind("<ButtonPress-1>", down)
         c.bind("<B1-Motion>", drag)

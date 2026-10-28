@@ -22,6 +22,17 @@ class Plugin(BasePlugin):
         self._lock = threading.Lock()
         seen = config.load_json(config.app_dir() / SEEN_FILE, {})
         self.seen: dict = seen if isinstance(seen, dict) else {}
+        self.chat_active = False                  # True, solange die Chat-Ansicht läuft (sie meldet dann selbst)
+        from .watcher import Watcher
+        self.watcher = Watcher(self)
+        self.apply_background()
+
+    def apply_background(self) -> None:
+        """Startet oder stoppt die Hintergrund-Abfrage je nach Einstellung (Einstellungen > Benachrichtigungen)."""
+        if self.app.notifier.prefs().community_background:
+            self.watcher.start()
+        else:
+            self.watcher.stop()
 
     # ---- Zugriff auf Dienste (nur mit Cloud-Konto)
     def client(self):
@@ -37,6 +48,7 @@ class Plugin(BasePlugin):
                 return None
             if self._svc is None or self._svc.client is not c:
                 self._svc = CommunityService(c)
+                self._svc.on_spaces = lambda sp: self.app.call_soon(self.cache_spaces, sp)
             return self._svc
 
     def forum(self):
@@ -49,6 +61,52 @@ class Plugin(BasePlugin):
                 self._forum = Forum(c)
             return self._forum
 
+    # ---- Angemeldet bleiben (Passphrase lokal gemerkt, siehe core/secretstore.py)
+    def stay_enabled(self) -> bool:
+        return bool(self.app.settings.get("community_stay"))
+
+    def _stay_key(self) -> str:
+        return str((self.app.user or {}).get("username") or (self.app.user or {}).get("id") or "user")
+
+    def _stay_file(self):
+        return config.app_dir() / "community_stay.json"
+
+    def remember_passphrase(self, passphrase: str) -> None:
+        from core import secretstore
+        d = config.load_json(self._stay_file(), {})
+        d = d if isinstance(d, dict) else {}
+        d[self._stay_key()] = secretstore.protect(passphrase)
+        config.save_json(self._stay_file(), d)
+
+    def stored_passphrase(self) -> str:
+        from core import secretstore
+        d = config.load_json(self._stay_file(), {})
+        tok = d.get(self._stay_key()) if isinstance(d, dict) else None
+        if not tok:
+            return ""
+        try:
+            return secretstore.unprotect(tok)
+        except Exception:
+            return ""
+
+    def forget_passphrase(self, everyone: bool = False) -> None:
+        d = config.load_json(self._stay_file(), {})
+        if isinstance(d, dict):
+            d = {} if everyone else {k: v for k, v in d.items() if k != self._stay_key()}
+            config.save_json(self._stay_file(), d)
+
+    def set_stay(self, on: bool) -> None:
+        self.app.settings["community_stay"] = bool(on)
+        if not on:
+            self.forget_passphrase(everyone=True)
+        self.app.save_settings()
+
+    def cache_spaces(self, spaces: list) -> None:
+        names = [{"id": s.get("id"), "name": s.get("name", "")} for s in spaces if s.get("kind") == "server"]
+        if names != self.app.settings.get("community_cache"):
+            self.app.settings["community_cache"] = names
+            self.app.save_settings()
+
     # ---- "gelesen"-Markierungen (nur lokal)
     def is_unread(self, channel: dict) -> bool:
         last = channel.get("last_id")
@@ -59,6 +117,7 @@ class Plugin(BasePlugin):
             self.seen[channel_id] = int(last_id)
 
     def on_shutdown(self):
+        self.watcher.stop()
         try:
             config.save_json(config.app_dir() / SEEN_FILE, dict(list(self.seen.items())[-500:]))
         except Exception:

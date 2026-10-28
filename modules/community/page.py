@@ -103,6 +103,15 @@ class CommunityPage(ctk.CTkFrame):
             self._setup_view()
         elif self.svc.unlocked:
             self._main_view()
+        elif self.plugin.stay_enabled() and self.plugin.stored_passphrase():
+            pw = self.plugin.stored_passphrase()
+            self.say(tr("Unlocking …"))
+
+            def bad(_err):
+                self.plugin.forget_passphrase()          # Passphrase stimmt nicht mehr: wieder normal fragen
+                self.say("")
+                self._unlock_view()
+            self.run(lambda: self.svc.unlock(pw), lambda _: (self.say(""), self._main_view()), bad)
         else:
             self._unlock_view()
 
@@ -158,11 +167,23 @@ class CommunityPage(ctk.CTkFrame):
         b.pack(fill="x", padx=16, pady=(0, 14))
         ui.muted(b, "Enter your passphrase to open your encryption keys on this computer.").pack(fill="x", pady=(0, 6))
         e = self._field(b, "Passphrase", secret=True)
+        stay = tk.BooleanVar(value=self.plugin.stay_enabled())
+        ctk.CTkCheckBox(b, text=tr("Stay signed in to the Community on this computer"), variable=stay).pack(anchor="w", pady=(6, 0))
 
         def go():
             p = e.get()
             self.say(tr("Unlocking …"))
-            self.run(lambda: self.svc.unlock(p), lambda _: (self.say(""), self._main_view()))
+
+            def ok(_r):
+                self.plugin.set_stay(stay.get())
+                if stay.get():
+                    try:
+                        self.plugin.remember_passphrase(p)
+                    except Exception:
+                        traceback.print_exc()
+                self.say("")
+                self._main_view()
+            self.run(lambda: self.svc.unlock(p), ok)
         e.bind("<Return>", lambda _e: go())
         r = ctk.CTkFrame(b, fg_color="transparent")
         r.pack(anchor="w", pady=(8, 0))

@@ -35,8 +35,11 @@ class PixelWatcher:
     """Prüft alle `interval` Sekunden. on_trigger() wird bei einem Treffer aufgerufen; danach `cooldown` Sekunden Pause
     (oder Stopp, wenn once=True). grab ist austauschbar (Tests)."""
 
-    def __init__(self, x, y, color, tolerance, on_trigger, interval=0.1, cooldown=2.0, once=False, grab=grab_pixel, on_error=None):
-        self.x, self.y, self.target = int(x), int(y), parse_hex(color) if isinstance(color, str) else tuple(color)
+    def __init__(self, x, y, color, tolerance, on_trigger, interval=0.1, cooldown=2.0, once=False, grab=grab_pixel, on_error=None, on_change=False):
+        self.x, self.y = int(x), int(y)
+        self.on_change = bool(on_change)               # True: auslösen, sobald sich die Farbe überhaupt ändert
+        self.target = None if self.on_change else (parse_hex(color) if isinstance(color, str) else tuple(color))
+        self.base = None
         self.tolerance, self.on_trigger = int(tolerance), on_trigger
         self.interval = max(0.02, float(interval))
         self.cooldown, self.once, self.grab, self.on_error = float(cooldown), once, grab, on_error
@@ -60,6 +63,17 @@ class PixelWatcher:
         if self._t:
             self._t.join(timeout)
 
+    def _hit(self, px) -> bool:
+        if not self.on_change:
+            return matches(px, self.target, self.tolerance)
+        if self.base is None:                           # erster Messwert = Ausgangsfarbe
+            self.base = px
+            return False
+        if distance(px, self.base) > max(0, self.tolerance):
+            self.base = px
+            return True
+        return False
+
     def _run(self):
         while not self._stop.is_set():
             try:
@@ -68,7 +82,7 @@ class PixelWatcher:
                 if self.on_error:
                     self.on_error(f"{type(exc).__name__}: {exc}")
                 return
-            if matches(px, self.target, self.tolerance):
+            if self._hit(px):
                 self.hits += 1
                 try:
                     self.on_trigger()

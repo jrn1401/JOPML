@@ -4,6 +4,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
+from core import perf
 from core import theme, ui
 from core.i18n import tr
 
@@ -302,4 +303,4 @@ class AutoClickerPage(ctk.CTkScrollableFrame):
         mins, secs = divmod(int(eng.elapsed()), 60)
         ui.cfg(self.stats, text=tr("Executions: {n}   ·   Run time: {t}", n=eng.count, t=f"{mins:02d}:{secs:02d}"))
         ui.cfg(self.hk_err, text=self.plugin.hotkey_error)
-        self.after(100, self._tick)
+        self.after(perf.ms(100), self._tick)

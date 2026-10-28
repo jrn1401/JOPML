@@ -1,4 +1,4 @@
-"""Modul "Add macros": eigene Makros schreiben, prüfen, speichern und ausführen; KI-Generator."""
+"""Modul "My macros": eigene Makros schreiben, prüfen, speichern und ausführen; KI-Generator."""
 import re
 import threading
 import time
@@ -10,7 +10,7 @@ from core.plugin_api import BasePlugin
 
 from . import dsl
 
-HOTKEY = "<f7>"
+HOTKEY = "<f7>"      # Standard; einstellbar über settings["macros_hotkey"]
 
 
 class Plugin(BasePlugin):
@@ -29,6 +29,17 @@ class Plugin(BasePlugin):
         self.current_text = ""
         self._listener = None
         self._register_hotkey()
+        from core.hotkey_registry import Entry
+
+        def set_key(key):
+            if not key:
+                return "Please enter a shortcut."
+            self.app.settings["macros_hotkey"] = key
+            self.app.save_settings()
+            self._register_hotkey()
+            return self.hotkey_error or None
+        self.app.hotkeys.register(Entry("macros.toggle", "My macros: Start / Stop", "My macros", HOTKEY,
+                                        get_key=lambda: self.app.settings.get("macros_hotkey") or HOTKEY, set_key=set_key))
 
     def on_shutdown(self):
         self.stop()
@@ -126,9 +137,16 @@ class Plugin(BasePlugin):
             self.run(self.current_text)
 
     def _register_hotkey(self):
+        if self._listener:
+            try:
+                self._listener.stop()
+            except Exception:
+                pass
+            self._listener = None
+        self.hotkey_error = ""
         try:
             from core.hotkeys import global_hotkeys
-            self._listener = global_hotkeys({HOTKEY: lambda: self.app.call_soon(self.toggle)})
+            self._listener = global_hotkeys({self.app.settings.get("macros_hotkey") or HOTKEY: lambda: self.app.call_soon(self.toggle)})
             self._listener.daemon = True
             self._listener.start()
         except Exception as exc:

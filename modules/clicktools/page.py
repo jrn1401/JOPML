@@ -11,7 +11,7 @@ from core.hub import HubPage
 from core.i18n import tr
 
 from . import appprofiles, hotkeys, mousekeys, pixel, scheduler
-from .crosshair import PRESETS, REACTIONS, SHAPES, CrosshairConfig
+from .crosshair import COVER_SHAPES, PRESETS, REACTIONS, SHAPES, CrosshairConfig
 
 
 def _say(label, text, ok=True):
@@ -121,16 +121,30 @@ class ClickToolsPage(HubPage):
             cfg.cover, cfg.hide_on_aim, cfg.react_on, cfg.keep_top = cv.get(), hv.get(), rv.get(), kv.get()
             apply()
         ctk.CTkSwitch(body, text=tr("Cover the crosshair of the game"), variable=cv, command=cover_changed).pack(anchor="w", pady=2)
-        ui.muted(body, "Draws a filled disc under your crosshair so the game's own crosshair is hidden. Choose the size so the game's crosshair is just covered.").pack(fill="x")
+        ui.muted(body, "Draws a filled shape under your crosshair so the game's own crosshair is hidden. “Cross” covers only the lines of the game's crosshair, "
+                       "so you still see everything else. Set the size so the lines are just covered (the game's crosshair must be completely inside).").pack(fill="x")
         r = ctk.CTkFrame(body, fg_color="transparent")
         r.pack(fill="x", pady=2)
-        ctk.CTkLabel(r, text=tr("Cover size"), width=170, anchor="w").pack(side="left")
-        cs = ctk.CTkSlider(r, from_=2, to=120, number_of_steps=118, width=240, command=lambda _v: (setattr(cfg, "cover_size", int(cs.get())), apply()))
-        cs.set(cfg.cover_size)
-        cs.pack(side="left")
+        ctk.CTkLabel(r, text=tr("Cover shape"), width=170, anchor="w").pack(side="left")
+        cshown = [tr(x) for x in COVER_SHAPES]
+        csm = ctk.CTkOptionMenu(r, values=cshown, width=170, command=lambda v: (setattr(cfg, "cover_shape", COVER_SHAPES[cshown.index(v)]), apply()))
+        csm.set(tr(cfg.cover_shape))
+        csm.pack(side="left")
+        for key, label, lo, hi in (("cover_size", "Cover size", 2, 120), ("cover_thickness", "Cover line width (Cross)", 1, 40)):
+            r = ctk.CTkFrame(body, fg_color="transparent")
+            r.pack(fill="x", pady=2)
+            ctk.CTkLabel(r, text=tr(label), width=170, anchor="w").pack(side="left")
+            sl = ctk.CTkSlider(r, from_=lo, to=hi, number_of_steps=hi - lo, width=240,
+                               command=lambda _v, k=key: (setattr(cfg, k, int(vars_[k].get())), apply()))
+            sl.set(getattr(cfg, key))
+            sl.pack(side="left")
+            vars_[key] = sl
+        av = tk.BooleanVar(value=cfg.cover_auto)
+        ctk.CTkSwitch(body, text=tr("Take the cover colour from the surroundings (blends in)"), variable=av,
+                      command=lambda: (setattr(cfg, "cover_auto", av.get()), apply())).pack(anchor="w", pady=(4, 2))
         r = ctk.CTkFrame(body, fg_color="transparent")
         r.pack(fill="x", pady=2)
-        ctk.CTkLabel(r, text=tr("Cover colour"), width=170, anchor="w").pack(side="left")
+        ctk.CTkLabel(r, text=tr("Fixed cover colour"), width=170, anchor="w").pack(side="left")
         ccb = ctk.CTkButton(r, text="", width=44, fg_color=cfg.cover_color, hover=False)
 
         def pick_cover():
@@ -162,6 +176,63 @@ class ClickToolsPage(HubPage):
                 apply()
         rcb.configure(command=pick_react)
         rcb.pack(side="left")
+        for key, label, lo, hi in (("spread_px", "Spread when shooting (px)", 0, 60), ("spread_rise_ms", "Opens in (ms)", 10, 600),
+                                   ("spread_fall_ms", "Closes in (ms)", 10, 1000)):
+            r = ctk.CTkFrame(body, fg_color="transparent")
+            r.pack(fill="x", pady=2)
+            ctk.CTkLabel(r, text=tr(label), width=170, anchor="w").pack(side="left")
+            sl = ctk.CTkSlider(r, from_=lo, to=hi, number_of_steps=hi - lo, width=240,
+                               command=lambda _v, k=key: (setattr(cfg, k, int(vars_[k].get())), apply()))
+            sl.set(getattr(cfg, key))
+            sl.pack(side="left")
+            vars_[key] = sl
+        ctk.CTkLabel(body, text=tr("Measure the spread from the game"), font=ctk.CTkFont(weight="bold"), anchor="w").pack(fill="x", pady=(10, 2))
+        ui.muted(body, "Copies how far the crosshair of your game opens when you shoot. The launcher watches the lines of the game's crosshair on your screen "
+                       "(only what you see anyway; no game memory). Your own crosshair is hidden during the measurement. "
+                       "Start, switch to the game, stand still, then hold the left mouse button for about 2 seconds. Works in windowed or borderless mode.").pack(fill="x")
+        r = ctk.CTkFrame(body, fg_color="transparent")
+        r.pack(fill="x", pady=3)
+        ctk.CTkLabel(r, text=tr("Crosshair colour in the game"), width=170, anchor="w").pack(side="left")
+        game_col = ctk.CTkEntry(r, width=100, placeholder_text="#ff0000")
+        game_col.pack(side="left")
+        ctk.CTkLabel(r, text=tr("(empty = detect)"), text_color=theme.MUTED).pack(side="left", padx=8)
+        r = ctk.CTkFrame(body, fg_color="transparent")
+        r.pack(fill="x", pady=3)
+        ctk.CTkLabel(r, text=tr("Colour tolerance"), width=170, anchor="w").pack(side="left")
+        tol = ctk.CTkSlider(r, from_=10, to=120, number_of_steps=110, width=240)
+        tol.set(40)
+        tol.pack(side="left")
+        r = ctk.CTkFrame(body, fg_color="transparent")
+        r.pack(fill="x", pady=3)
+        cal_btn = ctk.CTkButton(r, text="📏  " + tr("Measure the spread"), width=190,
+                                command=lambda: _say(cal_msg, tr(err), False) if (err := plugin.calibrate_spread_start(game_col.get(), int(tol.get()))) else None)
+        cal_btn.pack(side="left")
+        cal_stop = ctk.CTkButton(r, text=tr("Cancel"), width=90, fg_color=theme.c("hover"), text_color=theme.TEXT, command=plugin.calibrate_spread_cancel)
+        cal_stop.pack(side="left", padx=8)
+        cal_msg = ctk.CTkLabel(body, text="", wraplength=620, justify="left", anchor="w")
+        cal_msg.pack(fill="x")
+
+        def cal_tick():
+            if not cal_msg.winfo_exists():
+                return
+            st = plugin.spread_cal
+            ui.cfg(cal_btn, state="disabled" if st["running"] else "normal")
+            ui.cfg(cal_stop, state="normal" if st["running"] else "disabled")
+            ui.cfg(cal_msg, text=st["text"], text_color=theme.TEXT if st["running"] or st["ok"] is None else (theme.OK if st["ok"] else theme.DANGER))
+            cal_msg.after(400, cal_tick)
+
+        def cal_done():
+            if not cal_msg.winfo_exists():
+                return
+            new = plugin.crosshair_cfg
+            for k in ("spread_px", "spread_rise_ms", "spread_fall_ms"):
+                cfg.__dict__[k] = new.__dict__[k]
+                vars_[k].set(new.__dict__[k])
+            cfg.react_on, cfg.react = new.react_on, new.react
+            rv.set(cfg.react_on)
+            rm.set(tr(cfg.react))
+        plugin.on_spread_change = cal_done
+        cal_tick()
         ctk.CTkSwitch(body, text=tr("Hide while aiming (right mouse button held)"), variable=hv, command=cover_changed).pack(anchor="w", pady=(6, 2))
         ctk.CTkSwitch(body, text=tr("Keep the crosshair on top of the game"), variable=kv, command=cover_changed).pack(anchor="w", pady=2)
         ui.muted(body, "The reaction follows the left mouse button (colour change or spreading apart), hiding follows the right one. "
@@ -172,6 +243,55 @@ class ClickToolsPage(HubPage):
         ui.muted(body, "Only a visual aid on top of your screen. On Windows clicks pass through it; on macOS and Linux it may catch the mouse "
                        "depending on the desktop. Some games in exclusive fullscreen hide it – use borderless window mode. "
                        "Check the rules of your game: overlays can be forbidden in online games.").pack(fill="x", pady=(6, 0))
+        msg.pack(fill="x")
+        self._profiles_card(area, plugin)
+
+    def _profiles_card(self, area, plugin):
+        """Fadenkreuz-Profile je Spiel: speichern, laden, beim Wechsel in ein Programm automatisch laden."""
+        body = self.card(area, "Crosshair profiles per game", 1)
+        ui.muted(body, "Save the current crosshair (with cover and spread) under a name. If you enter part of the program's window title or file name "
+                       "(for example “valorant”), the profile loads by itself when that program is in the foreground. "
+                       "Keys for “Crosshair: next profile” and “show / hide” are set under Settings > Hotkeys.").pack(fill="x", pady=(0, 6))
+        msg = ctk.CTkLabel(body, text="", anchor="w", wraplength=620, justify="left")
+        names = list(plugin.xh_profiles)
+        r = ctk.CTkFrame(body, fg_color="transparent")
+        r.pack(fill="x", pady=3)
+        menu = ctk.CTkOptionMenu(r, values=names or ["–"], width=200)
+        menu.set(plugin.xh_current if plugin.xh_current in names else (names[0] if names else "–"))
+        menu.pack(side="left")
+
+        def rebuild():
+            for w in area.winfo_children():
+                w.destroy()
+            self.tab_crosshair(area, plugin)
+
+        def load():
+            if plugin.xh_load_profile(menu.get()):
+                rebuild()
+
+        def delete():
+            if menu.get() in plugin.xh_profiles:
+                plugin.xh_delete_profile(menu.get())
+                rebuild()
+        ctk.CTkButton(r, text=tr("Load"), width=80, command=load).pack(side="left", padx=6)
+        ctk.CTkButton(r, text=tr("Delete"), width=80, fg_color=theme.c("hover"), text_color=theme.TEXT, command=delete).pack(side="left")
+        r = ctk.CTkFrame(body, fg_color="transparent")
+        r.pack(fill="x", pady=3)
+        name = ctk.CTkEntry(r, width=160, placeholder_text=tr("Profile name"))
+        name.pack(side="left")
+        prog = ctk.CTkEntry(r, width=180, placeholder_text=tr("Program (optional)"))
+        prog.pack(side="left", padx=6)
+        if plugin.xh_current in plugin.xh_profiles:
+            name.insert(0, plugin.xh_current)
+            prog.insert(0, plugin.xh_profiles[plugin.xh_current]["program"])
+
+        def save():
+            err = plugin.xh_save_profile(name.get(), prog.get())
+            if err:
+                _say(msg, tr(err), False)
+            else:
+                rebuild()
+        ctk.CTkButton(r, text=tr("Save profile"), width=120, command=save).pack(side="left")
         msg.pack(fill="x")
 
     # ---------------------------------------------------------------- Maus & Tastatur
@@ -366,6 +486,9 @@ class ClickToolsPage(HubPage):
         menu.pack(side="left")
         once = tk.BooleanVar(value=bool(c.get("once", True)))
         ctk.CTkSwitch(body, text=tr("Only once, then stop"), variable=once).pack(anchor="w", pady=4)
+        chg = tk.BooleanVar(value=bool(c.get("on_change", False)))
+        ctk.CTkSwitch(body, text=tr("Trigger on any colour change (ignores the colour above; tolerance = how much it must change)"),
+                      variable=chg).pack(anchor="w", pady=4)
         msg = ctk.CTkLabel(body, text="", anchor="w", wraplength=620, justify="left")
         pick_btn = ctk.CTkButton(body, text=tr("Take position and colour from the mouse (3 s)"), width=330)
 
@@ -396,9 +519,9 @@ class ClickToolsPage(HubPage):
 
         def start():
             m = menu.get()
-            plugin.pixel_cfg = {"x": ex.get(), "y": ey.get(), "color": ecol.get(), "tol": etol.get(), "macro": m, "once": once.get()}
+            plugin.pixel_cfg = {"x": ex.get(), "y": ey.get(), "color": ecol.get(), "tol": etol.get(), "macro": m, "once": once.get(), "on_change": chg.get()}
             plugin.save()
-            err = plugin.start_pixel(ex.get(), ey.get(), ecol.get(), etol.get(), m if m in names else "", once.get())
+            err = plugin.start_pixel(ex.get(), ey.get(), ecol.get(), etol.get(), m if m in names else "", once.get(), chg.get())
             _say(msg, tr(err) if err else tr("Watching … (press Stop to end)"), not err)
 
         def stop():

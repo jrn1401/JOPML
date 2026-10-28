@@ -1,4 +1,4 @@
-"""Seite "Add macros": Editor, Prüfen, Ausführen, Speichern, KI-/Offline-Generator."""
+"""Seite "My macros": Editor, Prüfen, Ausführen, Speichern, KI-/Offline-Generator."""
 import threading
 import time
 import tkinter as tk
@@ -21,6 +21,9 @@ type "text"
 scroll 3            (negative = down)
 wait 50ms           (ms, s, m; 100ms-300ms = random)
 repeat 10 ... end   |   repeat forever ... end
+set n 0 / add n 1    (variables; "type" shows {n})
+if n >= 3 ... else ... end   (== != < > <= >=)
+stop                 (ends the macro)
 # comment"""
 
 EXAMPLE = '# click at 500,300 every 50 ms\nrepeat forever\n  click left 500 300\n  wait 50ms\nend'
@@ -41,7 +44,7 @@ class MacroPage(ctk.CTkScrollableFrame):
         self.plugin, self.app = plugin, plugin.app
         self._busy = False
         self.columnconfigure(0, weight=1)
-        ui.page_title(self, "Add macros", "Write macros yourself or describe them and let the generator write them.").grid(
+        ui.page_title(self, "My macros", "Write macros yourself or describe them and let the generator write them.").grid(
             row=0, column=0, sticky="w", padx=24, pady=(20, 8))
 
         # --- Generator
@@ -81,6 +84,12 @@ class MacroPage(ctk.CTkScrollableFrame):
                                    fg_color=theme.c("inset"))
         self.text.pack(fill="x", padx=16, pady=10)
         self.text.insert("1.0", plugin.current_text or EXAMPLE)
+        try:
+            self.text._textbox.tag_config("macro_error", background="#7f1d1d", foreground="#ffffff")
+        except Exception:
+            pass
+        self._live_job = None
+        self.text.bind("<KeyRelease>", self._typed)
         ctl = ui.row(e)
         ctl.pack(fill="x", padx=16, pady=(0, 6))
         ctk.CTkButton(ctl, text="▶  " + tr("Run"), width=110, fg_color="#2e9d5b", hover_color="#247a47",
@@ -88,6 +97,7 @@ class MacroPage(ctk.CTkScrollableFrame):
         ctk.CTkButton(ctl, text="■  " + tr("Stop"), width=100, fg_color="#c0392b", hover_color="#962d22",
                       command=plugin.stop).pack(side="left", padx=6)
         ctk.CTkButton(ctl, text=tr("Check"), width=90, command=self.check).pack(side="left", padx=6)
+        ctk.CTkButton(ctl, text=tr("Preview"), width=90, fg_color=theme.c("hover"), text_color=theme.TEXT, command=self.preview).pack(side="left", padx=2)
         self.pos_btn = ctk.CTkButton(ctl, text=tr("Insert mouse position (3 s)"), width=210, command=self.capture_pos)
         self.pos_btn.pack(side="left", padx=6)
         ctl2 = ui.row(e)
@@ -123,13 +133,68 @@ class MacroPage(ctk.CTkScrollableFrame):
         self.saved.configure(values=names or [tr("(none saved)")])
         self.saved.set(select or tr("Open saved …"))
 
+    # ---------- Fehler direkt in der Zeile
+    def _mark(self, line: int = 0):
+        """Hebt die fehlerhafte Zeile im Editor rot hervor (line 0 = Markierung entfernen)."""
+        try:
+            tb = self.text._textbox
+            tb.tag_remove("macro_error", "1.0", "end")
+            if line:
+                tb.tag_add("macro_error", f"{line}.0", f"{line}.end+1c")
+                tb.see(f"{line}.0")
+        except Exception:
+            pass
+
+    def _typed(self, _e=None):
+        """Während des Tippens (nach kurzer Pause) prüfen: Fehler erscheinen sofort in der Zeile."""
+        if self._live_job is not None:
+            self.after_cancel(self._live_job)
+        self._live_job = self.after(700, self._live_check)
+
+    def _live_check(self):
+        self._live_job = None
+        if not self.winfo_exists():
+            return
+        text = self.script()
+        if not text.strip():
+            self._mark(0)
+            return
+        try:
+            dsl.parse(text)
+        except dsl.MacroError as exc:
+            self._mark(exc.line)
+            self._say(str(exc), False)
+        else:
+            self._mark(0)
+
+    def preview(self):
+        """Zeigt, was das Makro tun würde (ohne Wartezeiten, ohne etwas zu drücken)."""
+        try:
+            cmds = dsl.parse(self.script())
+        except dsl.MacroError as exc:
+            self._mark(exc.line)
+            self._say(str(exc), False)
+            return
+        lines, cut = dsl.dry_run(cmds)
+        win = ctk.CTkToplevel(self)
+        win.title(tr("Preview"))
+        win.geometry("460x420")
+        win.attributes("-topmost", True)
+        ctk.CTkLabel(win, text=tr("Test run – nothing is pressed. This is what the macro would do, in this order:"), wraplength=420, justify="left").pack(padx=14, pady=(12, 4), anchor="w")
+        box = ctk.CTkTextbox(win)
+        box.pack(fill="both", expand=True, padx=14, pady=6)
+        box.insert("1.0", "\n".join(f"{i}. {l}" for i, l in enumerate(lines, start=1)) + (("\n… " + tr("(shortened)")) if cut else ""))
+        box.configure(state="disabled")
+
     # ---------- Aktionen
     def check(self):
         try:
             cmds = dsl.parse(self.script())
         except dsl.MacroError as exc:
+            self._mark(exc.line)
             self._say(str(exc), False)
             return False
+        self._mark(0)
         self._say(tr("OK – {n} top-level commands.", n=len(cmds)))
         return True
 

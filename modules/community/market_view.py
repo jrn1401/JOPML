@@ -109,7 +109,7 @@ class MarketView(ctk.CTkFrame):
             except (ValueError, dsl.MacroError) as exc:
                 self.say(tr(str(exc)), False)
                 return
-            self.say(tr("Imported as '{n}'. Open it on the Add macros page.", n=n))
+            self.say(tr("Imported as '{n}'. Open it on the My macros page.", n=n))
             top.destroy()
         ctk.CTkButton(r, text=tr("Import"), width=100, command=do_import).pack(side="left")
         stars = ctk.CTkOptionMenu(r, values=["★" * i for i in range(1, 6)], width=100, command=lambda v: self.page.run(
@@ -134,7 +134,7 @@ class MarketView(ctk.CTkFrame):
         ctk.CTkLabel(top, text=tr("Description"), anchor="w").pack(fill="x", padx=16, pady=(8, 0))
         descr = ctk.CTkEntry(top)
         descr.pack(fill="x", padx=16)
-        ctk.CTkLabel(top, text=tr("Macro (from the Add macros editor, or choose a saved one)"), anchor="w").pack(fill="x", padx=16, pady=(8, 0))
+        ctk.CTkLabel(top, text=tr("Macro (from the My macros editor, or choose a saved one)"), anchor="w").pack(fill="x", padx=16, pady=(8, 0))
         saved = plugin.list_macros() if plugin else []
         pick = ctk.CTkOptionMenu(top, values=[tr("Current editor text")] + saved, width=240)
         pick.pack(anchor="w", padx=16)

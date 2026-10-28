@@ -30,6 +30,13 @@ DEFAULT_SETTINGS = {
     # --- v1.3 ---
     "nav_order": [],               # Reihenfolge der Module in der Seitenleiste (leer = Standard)
     "nav_hidden": [],              # ausgeblendete Module
+    "diagnostics": True,           # anonyme Diagnose (Lebenszeichen + Fehler) an den Entwickler
+    "community_stay": False,       # in der Community angemeldet bleiben (Passphrase lokal merken)
+    "community_cache": [],         # zuletzt bekannte Server (für die Einstellungen ohne Anmeldung)
+    "potato_mode": False,          # Kartoffel-Modus: alles Rechenintensive aus
+    "resize_freeze": True,         # Seite beim Fensterziehen ausblenden (flüssiger)
+    "hover_effect": True,          # Module in Menü und Dashboard werden beim Darüberfahren leicht hervorgehoben
+    "colored_icons": True,         # bunte Symbole in Menü und Overlay
     "bg_image": "",                # eigenes Hintergrundbild (Pfad, nur lokal)
     "bg_dim": 40,                  # Abdunkeln des Bildes in Prozent
     "bg_height": "Medium",         # Small | Medium | Large
@@ -38,6 +45,11 @@ DEFAULT_SETTINGS = {
     "nav_version": 0,              # 2 = neue Menüstruktur (1.5.0); ältere Reihenfolgen werden einmal zurückgesetzt
     "notify": {},                  # Benachrichtigungen (siehe core/notify.py); leer = Standardwerte
     "panic_hotkey": "<ctrl>+<shift>+<f12>",   # Notaus: stoppt alles
+    # --- v1.6.0 ---
+    "hotkeys": {},                 # {id: {"key": "...", "enabled": bool, "window": "Teil des Fenstertitels"}} (siehe core/hotkey_registry.py)
+    "hotkey_profiles": {},         # {Name: {id: {...}}} gespeicherte Tastenbelegungen (z. B. je Spiel)
+    "macros_hotkey": "<f7>",       # Start/Stopp der Makros
+    "gm_params": {},               # zuletzt benutzte Werte der Spiele-Makros {preset_id: {...}}
 }
 
 

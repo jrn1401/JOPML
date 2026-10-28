@@ -94,6 +94,7 @@ class CommunityService:
         self._keys: dict[tuple[str, int], bytes] = {}
         self._members: dict[str, dict] = {}
         self._lock = threading.RLock()
+        self.on_spaces = None             # optional: wird mit der Serverliste aufgerufen (Zwischenspeicher für die Einstellungen)
 
     # ------------------------------------------------------------ Aufrufe
     def _rpc(self, name: str, p: dict | None = None):
@@ -165,6 +166,12 @@ class CommunityService:
         spaces = self._rpc("jopml_c_spaces") or []
         with self._lock:
             self.spaces = spaces
+        if self.on_spaces:
+            try:
+                self.on_spaces(list(spaces))
+            except Exception:
+                pass
+        with self._lock:
             for s in spaces:
                 for w in s.get("wraps", []):
                     k = (s["id"], int(w["epoch"]))

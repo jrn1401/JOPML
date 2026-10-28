@@ -94,6 +94,22 @@ class Plugin(BasePlugin):
         self._last_file = app_dir() / "autoclicker_last.json"
         self.profile = merge_profile(load_json(self._last_file))
         self._register_hotkeys()
+        from core.hotkey_registry import Entry
+
+        def setter(field):
+            def set_key(key):
+                if not key:
+                    return "Please enter a shortcut."
+                prof = dict(self.profile)
+                prof[field] = key
+                self.set_profile(prof)
+                save_json(self._last_file, self.profile)
+                return self.hotkey_error or None
+            return set_key
+        self.app.hotkeys.register(Entry("autoclicker.start", "Autoclicker: Start", "Autoclicker", "<f6>",
+                                        get_key=lambda: self.profile["hotkey_start"], set_key=setter("hotkey_start")))
+        self.app.hotkeys.register(Entry("autoclicker.stop", "Autoclicker: Stop", "Autoclicker", "<f6>",
+                                        get_key=lambda: self.profile["hotkey_stop"], set_key=setter("hotkey_stop")))
 
     def on_shutdown(self):
         self.engine.stop()

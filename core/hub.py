@@ -2,6 +2,7 @@
 import customtkinter as ctk
 
 from core import theme, ui
+from core.tabbar import WrapTabs
 from core.i18n import tr
 
 
@@ -17,17 +18,20 @@ class HubPage(ctk.CTkFrame):
         self._own = {tr(t[0]) for t in tabs if len(t) > 2 and t[2]}
         self._views: dict = {}
         self._cur = None
+        self.seg = None
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(2, weight=1)
         ui.page_title(self, title, subtitle).grid(row=0, column=0, sticky="w", padx=24, pady=(20, 6))
         first = list(self._tabs)[0]
         if len(self._tabs) > 1:
-            self.seg = ctk.CTkSegmentedButton(self, values=list(self._tabs), command=self.open)
-            self.seg.grid(row=1, column=0, sticky="w", padx=24, pady=(0, 6))
+            self.seg = WrapTabs(self, list(self._tabs), self.open)
+            self.seg.grid(row=1, column=0, sticky="ew", padx=24, pady=(0, 2))
             self.seg.set(first)
         self.open(first)
 
     def open(self, label: str):
+        if self.seg is not None and self.seg.get() != label:
+            self.seg.set(label)
         if self._cur is not None:
             self._cur.grid_forget()
         if label not in self._views:

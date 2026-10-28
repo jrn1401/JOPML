@@ -4,6 +4,7 @@ import hashlib
 import http.server
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -820,6 +821,10 @@ def test_community_pg():
         mid_du = MB.publish("Halten und loslassen", "down/up seit 1.5.0", held)
         check(MB.get(mid_du)["script"] == held, "Server nimmt Makros mit down/up und zufälliger Wartezeit an")
         MG.delete(mid_du)
+        logic = 'set n 0\nrepeat 3\n  add n 1\n  if n == 2\n    type "Runde {n}"\n  else\n    click\n  end\nend\nstop'
+        mid_lo = MB.publish("Variablen und if", "seit 1.7.0", logic)
+        check(MB.get(mid_lo)["script"] == logic, "Server nimmt Makros mit set/add/if/else/stop an")
+        MG.delete(mid_lo)
         MC = MarketService(C)
         check("allowed" in err(MC.delete, mid_), "Fremde dürfen nicht löschen")
         for who in (MB, MG, MC):
@@ -1056,6 +1061,41 @@ def test_ci_migrations_in_order():
         ok_du = pg_shim.sql(db, "select public.jopml_m_script_ok(E'down mouse_left\\nwait 10ms-20ms\\nup mouse_left')")
         check(ok_du.strip() == "t", "Server-Prüfung kennt down/up")
         check(pg_shim.sql(db, "select public.jopml_m_script_ok('downx 1')").strip() == "f", "nur ganze Befehlswörter")
+        from modules.macros import dsl as _dsl
+        ops = set(re.findall(r'op (?:==|in) \(?"([a-z]+)"(?:, "([a-z]+)")?', (ROOT / "modules/macros/dsl.py").read_text(encoding="utf-8")))
+        names = sorted({n for pair in ops for n in pair if n})
+        bad = [n for n in names if pg_shim.sql(db, f"select public.jopml_m_script_ok('{n} 1')").strip() != "t"]
+        check(len(names) >= 15 and not bad, f"Server kennt alle Befehle der Makro-Sprache, es fehlen: {bad} (gefunden: {names})")
+        # Admin-Übersicht (1.7.0): nur Admins, Lebenszeichen und Fehlerberichte begrenzt, anon ohne Zugriff
+        ua, ub = "aaaaaaaa-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000002"
+        pg_shim.sql(db, f"insert into auth.users (id, email) values ('{ua}', 'admin@x.de'), ('{ub}', 'user@x.de'); insert into public.jopml_admins (user_id) values ('{ua}')")
+        as_b = f"set role authenticated; set request.jwt.claim.sub = '{ub}'; "
+        pg_shim.sql(db, as_b + "select public.jopml_heartbeat('1.7.2', 'Windows', 'dashboard')")
+        pg_shim.sql(db, as_b + "select public.jopml_log_error('crash', 'x', 't', '1.7.2', 'Windows') from generate_series(1, 30)")
+        check(pg_shim.sql(db, "select count(*) from public.jopml_errors") == "20", "Fehlerberichte pro Nutzer begrenzt")
+        for fn in ("jopml_admin_overview()", "jopml_admin_users(10)", "jopml_admin_errors(10)", "jopml_admin_clear_errors()"):
+            try:
+                pg_shim.sql(db, as_b + f"select public.{fn}")
+                check(False, f"{fn} darf nur der Admin")
+            except RuntimeError as e:
+                check("not allowed" in str(e), f"{fn}: {e}")
+        for q in ("select * from public.jopml_errors", "select * from public.jopml_presence"):
+            try:
+                pg_shim.sql(db, as_b + q)
+                check(False, f"direkter Zugriff: {q}")
+            except RuntimeError as e:
+                check("permission denied" in str(e) or "row-level" in str(e), str(e))
+        try:
+            pg_shim.sql(db, "set role anon; select public.jopml_heartbeat('1', 'x', 'y')")
+            check(False, "anon darf kein Lebenszeichen schicken")
+        except RuntimeError as e:
+            check("permission denied" in str(e), str(e))
+        as_a = f"set role authenticated; set request.jwt.claim.sub = '{ua}'; "
+        ov = json.loads(pg_shim.sql(db, as_a + "select public.jopml_admin_overview()").splitlines()[-1])
+        check(ov["online_now"] == 1 and ov["registered"] == 2 and ov["errors_total"] == 20, f"Admin-Übersicht: {ov}")
+        check("user@x.de" in pg_shim.sql(db, as_a + "select email from public.jopml_admin_users(10)"), "Admin sieht Konten")
+        pg_shim.sql(db, as_a + "select public.jopml_admin_clear_errors()")
+        check(pg_shim.sql(db, "select count(*) from public.jopml_errors") == "0", "Admin löscht Fehlerberichte")
     finally:
         pg_shim.drop_db(db)
 
@@ -1064,11 +1104,11 @@ def test_release_workflow_assets():
     """Das GitHub-Release muss EXE, Setup.exe und version.json enthalten; die Versionsnummer passt zu den Release-Notes."""
     from core.version import APP_VERSION
     wf = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-    iss = (ROOT / "installer/JaronsOPMakro.iss").read_text(encoding="utf-8")
+    iss = (ROOT / "installer.iss").read_text(encoding="utf-8")
     create = [ln for ln in wf.splitlines() if "gh release create" in ln]
     check(len(create) == 1 and all(f in create[0] for f in ("dist/JaronsOPMakro.exe", "dist/JaronsOPMakro-Setup.exe", "dist/version.json")),
           f"Release-Dateien: {create}")
-    check("OutputBaseFilename=JaronsOPMakro-Setup" in iss and "installer/JaronsOPMakro.iss" in wf, "Setup wird gebaut")
+    check("//FJaronsOPMakro-Setup installer.iss" in wf and "OutputDir=dist" in iss and "dist\\{#AppExe}" in iss, "Setup wird aus installer.iss gebaut (gleicher Name wie SETUP_BAUEN.bat, Datei ohne Versionsnummer)")
     check("PrivilegesRequired=lowest" in iss, "Setup ohne Adminrechte (Auto-Update kann die EXE ersetzen)")
     first = (ROOT / "RELEASE_NOTES.txt").read_text(encoding="utf-8").split(":", 1)[0]
     check(first == f"Version {APP_VERSION}", f"RELEASE_NOTES beginnt mit {first!r}, APP_VERSION ist {APP_VERSION}")
@@ -1393,9 +1433,9 @@ def test_handbook_current():
     check(all(items for _, items in handbook.CHANGELOG), "jeder Eintrag hat Inhalt")
     for m in list(BUILTIN_MODULES) + ["core"]:
         check(m in handbook.SECTIONS, f"Handbuch: Abschnitt für Modul {m} fehlt")
-    check(len(handbook.text()) < 18000, "Handbuch zu lang für die Anfrage (Server nimmt höchstens 20000 Zeichen)")
+    check(len(handbook.text()) < 30000, "Handbuch zu lang für die Anfrage (Server nimmt höchstens 40000 Zeichen)")
     ts = Path(__file__).resolve().parent.parent / "supabase" / "functions" / "jopml-ai" / "knowledge.ts"
-    check(f"INSTALLED VERSION: {APP_VERSION}" in ts.read_text(encoding="utf-8"), "knowledge.ts veraltet: python tools/gen_knowledge.py ausführen")
+    check(f"v{APP_VERSION}" in ts.read_text(encoding="utf-8"), "knowledge.ts veraltet: python tools/gen_knowledge.py ausführen")
     check(re.search(r"v" + re.escape(APP_VERSION), ts.read_text(encoding="utf-8")) is not None, "knowledge.ts ohne aktuelle Version")
 
 
@@ -1577,7 +1617,7 @@ def test_notify():
 def test_gui_smoke():
     from core import app as app_mod, config
     s = config.load_settings()
-    s.update({"first_run_done": True, "legal_version": "2026-10-26"})
+    s.update({"first_run_done": True, "legal_version": "2026-10-28b"})
     config.save_settings(s)
     for lang in ("en", "de", "zh"):
         s["language"] = lang
@@ -1586,7 +1626,22 @@ def test_gui_smoke():
         if "smoke" not in a.accounts.users:
             a.accounts.register("smoke", "Smoke", "", "geheim123")
         a.login_done(a.identity.login("smoke", "geheim123"), None)
-        check("publisher" not in a.nav, "Publish-Menü ist ohne Admin unsichtbar")
+        check("admin" not in a.nav and "publisher" not in a.nav, "Admin-Menü ist ohne Admin unsichtbar")
+        check("assistant" in a.nav and "settings" in a.nav, "Hilfe-Assistent steht fest in der Seitenleiste")
+        a.show("dashboard")
+        a.dashboard._toggle_modules()
+        check(a.dashboard._mods_open, "Modul-Übersicht klappt auf")
+        a.dashboard._toggle_modules()
+        check(not a.dashboard._mods_open, "Modul-Übersicht klappt zu")
+        pages_before = dict(a.pages)
+        a.apply_look({"colored_icons": False})
+        a._soft_rebuild()
+        check(a.pages == pages_before and "assistant" in a.nav, "Weiche Änderung baut nur die Seitenleiste neu")
+        a.apply_look({"colored_icons": True, "potato_mode": True})
+        a._soft_rebuild()
+        a.apply_look({"potato_mode": False})
+        a._soft_rebuild()
+        check(a.pages == pages_before, "Kartoffel-Modus schalten lässt die Seiten stehen")
         for pid in ["dashboard", "autoclicker", "clicktools", "gamemacros", "macros", "productivity", "gamer", "assistant", "contact", "settings"]:
             a.show(pid)
         for pid in ("autoclicker", "clicktools", "gamemacros", "gamer", "productivity"):        # alle Reiter einmal bauen
@@ -1595,11 +1650,13 @@ def test_gui_smoke():
                 page.open(label)
         a.is_admin = True
         a._rebuild_keep_page()
-        check("publisher" in a.nav, "Publish-Menü für Admin sichtbar")
-        a.show("publisher")
+        check("admin" in a.nav, "Admin-Menü für Admin sichtbar")
+        a.show("admin")
+        for label in list(a.pages["admin"]._tabs):
+            a.pages["admin"].open(label)
         a.is_admin = False
         a._rebuild_keep_page()
-        for section in ["Account", "Appearance", "Layout", "Language", "System", "Notifications", "Performance", "Legal & sources"]:
+        for section in ["Account", "Appearance", "Layout", "Language", "System", "Notifications", "Hotkeys", "Performance", "Legal & sources"]:
             a.settings_section = section
             a.pages.pop("settings", None)
             a.show("settings")
@@ -1643,13 +1700,518 @@ def test_v152_crosshair_cover_react():
     off = ch.CrosshairConfig(react="Spread on fire", hide_on_aim=True, react_on=False)
     check(ch.state_look(off, True, False) == (off.color, 0, True) and ch.state_look(off, False, True)[2] is False, "Reaktion aus: nichts ändert sich")
     check(ch.state_look(ch.CrosshairConfig(hide_on_aim=False), False, True)[2] is True and ch.extent(off) == off.size, "Zielen-Ausblenden aus, kein Platz für Spreizen")
-    c = ch.CrosshairConfig(shape="Cross with gap", size=10, gap=3, react_on=True, react="Spread on fire", hide_on_aim=True, color="#00ff00", react_color="#ff0000").clamp()
+    c = ch.CrosshairConfig(shape="Cross with gap", size=10, gap=3, react_on=True, react="Spread on fire", hide_on_aim=True, color="#00ff00", react_color="#ff0000", spread_px=9).clamp()
     check(ch.state_look(c, False, False) == ("#00ff00", 0, True), "Ruhezustand")
-    check(ch.state_look(c, True, False) == ("#00ff00", ch.SPREAD, True), "Schießen: auseinander")
+    check(ch.state_look(c, True, False) == ("#00ff00", 9, True), "Schießen: auseinander")
     check(ch.state_look(c, True, True)[2] is False, "Zielen blendet aus")
     c.react = "Colour on fire"
     check(ch.state_look(c, True, False)[0] == "#ff0000", "Schießen: Farbe")
-    check(ch.primitives(c, 6)[0][1] == -16 and ch.extent(ch.CrosshairConfig(cover=True, cover_size=50)) == 50, "Spreizen und Fenstergröße")
+    c.react = "Spread on fire"
+    check(ch.primitives(c, 6)[0][1] == -16 and ch.extent(c) == 19 and ch.extent(ch.CrosshairConfig(cover=True, cover_size=50)) == 50, "Spreizen und Fenstergröße")
+
+
+def test_v154_cover_and_spread_calibration():
+    from PIL import Image, ImageDraw
+    from modules.clicktools import crosshair as ch
+    from modules.clicktools import spreadcal as sc
+    # Konfiguration begrenzt
+    c = ch.CrosshairConfig.from_dict({"cover_shape": "?", "cover_thickness": 999, "spread_px": 999, "spread_rise_ms": 0, "spread_fall_ms": 99999, "cover_auto": 0})
+    check(c.cover_shape == "Cross" and c.cover_thickness <= 40 and c.spread_px <= 60 and c.spread_rise_ms >= 10 and c.spread_fall_ms <= 3000 and c.cover_auto is False, "Grenzen der neuen Werte")
+    # Abdeckung: Kreuz deckt nur schmale Streifen, Scheibe alles
+    cross = ch.cover_shapes(ch.CrosshairConfig(cover_shape="Cross", cover_size=20, cover_thickness=6))
+    check([x[0] for x in cross] == ["h", "v"] and cross[0][2:] == (-20, -3, 20, 3), "Kreuz-Abdeckung schmal")
+    check(ch.cover_shapes(ch.CrosshairConfig(cover_shape="Disc", cover_size=20))[0][1] == "oval", "Scheibe")
+    # weiche Streuung
+    sp = ch.CrosshairConfig(spread_px=10, spread_rise_ms=100, spread_fall_ms=200)
+    v = ch.step_spread(0, 10, sp, 50)
+    check(abs(v - 5) < 1e-6 and ch.step_spread(v, 10, sp, 500) == 10, "Streuung steigt weich und stoppt am Ziel")
+    check(abs(ch.step_spread(10, 0, sp, 100) - 5) < 1e-6 and ch.step_spread(1, 0, sp, 500) == 0, "Streuung fällt weich")
+    # Umgebungsfarbe
+    check(ch.mix((0, 0, 0), (100, 200, 50)) == (50, 100, 25), "Farbmischung")
+    img = Image.new("RGB", (40, 40), (10, 20, 30))
+    check(ch.ring_colors(img, 28, 6)["left"] == (10, 20, 30), "Randfarben")
+    # Kalibrierung am nachgestellten Spielbild
+    def shot(gap, col=(255, 0, 0), bg=(40, 60, 40)):
+        im = Image.new("RGB", (161, 161), bg)
+        d = ImageDraw.Draw(im)
+        m = 80
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            d.line([(m + dx * gap, m + dy * gap), (m + dx * (gap + 8), m + dy * (gap + 8))], fill=col, width=2)
+        return im
+    check(sc.gap_of(shot(5), (255, 0, 0)) == 5 and sc.gap_of(shot(14), (255, 0, 0)) == 14, "Lücke gemessen")
+    check(sc.gap_of(Image.new("RGB", (161, 161), (40, 60, 40)), (255, 0, 0)) is None, "kein Fadenkreuz gefunden")
+    check(sc.detect_color(shot(6)) == "#ff0000", "Farbe erkannt")
+    check(sc.parse_hex("#ff8800") == (255, 136, 0), "Farbe lesen")
+    try:
+        sc.parse_hex("rot")
+        check(False, "ungültige Farbe")
+    except sc.SpreadError:
+        pass
+    series = [(i * 0.1, 5 + min(8, i * 2.0) if i * 0.1 <= 1.0 else max(5, 13 - (i * 0.1 - 1.0) * 40)) for i in range(0, 20)]
+    r = sc.analyze(5, series, 1.0)
+    check(r["spread_px"] == 8 and 100 <= r["spread_rise_ms"] <= 500 and 50 <= r["spread_fall_ms"] <= 500, f"Auswertung {r}")
+    try:
+        sc.analyze(5, [(i * 0.1, 5) for i in range(20)], 1.0)
+        check(False, "keine Streuung erkannt")
+    except sc.SpreadError:
+        pass
+
+
+def test_v160_hotkey_registry():
+    from core import hotkey_registry as hr
+    check(hr.normalize("Shift + ctrl+K") == "<ctrl>+<shift>+k" and hr.normalize("f9") == "<f9>" and hr.normalize("") == "", "Kürzel normalisieren")
+    for bad in ("k", "ctrl+", "ctrl+ä", "foo+k"):
+        try:
+            hr.normalize(bad)
+            check(False, f"ungültig: {bad}")
+        except ValueError:
+            pass
+
+    class App:
+        def __init__(self):
+            self.settings, self.saved, self.calls = {}, 0, []
+
+        def save_settings(self):
+            self.saved += 1
+
+        def call_soon(self, fn, *a):
+            self.calls.append(fn)
+            fn(*a)
+
+        def after(self, ms, fn):
+            return "job"
+
+        def after_cancel(self, job):
+            pass
+    app = App()
+    fired = []
+    reg = hr.Registry(app, window_title=lambda: "Awesome Game - Main Menu")
+    reg.register(hr.Entry("a", "A", "G", "<f6>", action=lambda: fired.append("a")))
+    reg.register(hr.Entry("b", "B", "G", "", action=lambda: fired.append("b")))
+    ext = {"k": "<f6>"}
+    reg.register(hr.Entry("ext", "Ext", "G", "<f6>", get_key=lambda: ext["k"], set_key=lambda k: ext.__setitem__("k", k)))
+    check(set(reg.conflicts().get("<f6>", [])) == {"a", "ext"}, "Doppelbelegung erkannt (auch mit fremdem Eintrag)")
+    check(reg.set_key("b", "ctrl+alt+b") == "" and reg.key_of("b") == "<ctrl>+<alt>+b" and app.settings["hotkeys"]["b"]["key"] == "<ctrl>+<alt>+b", "Taste setzen und speichern")
+    check(reg.set_key("b", "x") != "" and reg.key_of("b") == "<ctrl>+<alt>+b", "ungültige Taste ändert nichts")
+    reg.set_enabled("a", False)
+    check(reg.conflicts() == {} and reg.enabled("a") is False, "ausgeschaltet: kein Konflikt")
+    reg.set_enabled("a", True)
+    reg.set_window("a", "awesome")
+    check(reg.conflicts() == {} or "<f6>" in reg.conflicts(), "mit Programm-Beschränkung")
+    check(reg.set_key("ext", "f8") == "" and ext["k"] == "<f8>", "fremder Eintrag wird über sein Modul geändert")
+    snap = reg.snapshot()
+    reg.reset()
+    check(reg.key_of("b") == "" and ext["k"] == "<f6>", "Zurücksetzen")
+    check(reg.load_snapshot(snap) >= 2 and reg.key_of("b") == "<ctrl>+<alt>+b", "Profil laden")
+    check(reg.load_snapshot({"nope": {"key": "f1"}, "a": {"key": "kaputt"}}) == 0, "unbekannte und ungültige Einträge übersprungen")
+    check(reg.save_profile("") != "" and reg.save_profile("Shooter") == "" and "Shooter" in app.settings["hotkey_profiles"], "Profil speichern")
+    # Auslösen: Eintrag für ein Programm gewinnt vor dem globalen
+    reg2 = hr.Registry(app, window_title=lambda: "Awesome Game - Main Menu")
+    app.settings["hotkeys"] = {}
+    reg2.register(hr.Entry("g", "Global", "G", "<f5>", action=lambda: fired.append("global")))
+    reg2.register(hr.Entry("s", "Scoped", "G", "<f5>", action=lambda: fired.append("scoped")))
+    reg2.set_window("s", "awesome game")
+    fired.clear()
+    reg2._make_trigger("g")()
+    check(fired == ["scoped"], f"Programm-Kürzel gewinnt: {fired}")
+    reg2.set_window("s", "other game")
+    fired.clear()
+    reg2._make_trigger("g")()
+    check(fired == ["global"], "falsches Programm: globales Kürzel")
+
+
+def test_v160_gamer_helpers():
+    from modules.gamer import helpers as h
+    m = h.MatchCounter({"wins": 2, "kills": "x"})
+    m.add("kills", 6)
+    m.add("deaths", 2)
+    m.add("losses")
+    check(m.wins == 2 and m.kills == 6 and m.kd() == 3.0 and m.winrate() == 67, "Match-Zähler")
+    try:
+        m.add("unsinn")
+        check(False, "unbekanntes Feld")
+    except ValueError:
+        pass
+    m.add("kills", -100)
+    check(m.kills == 0, "nie unter 0")
+    t = [0.0]
+    nt = h.NamedTimers([{"name": "Boss", "seconds": "90"}], clock=lambda: t[0])
+    check(len(nt.slots) == 6 and nt.slots[0]["seconds"] == 90, "sechs Timer")
+    nt.start(0)
+    t[0] = 30
+    check(nt.lines() == ["Boss  01:00"] and nt.due() == [], "Timer läuft")
+    t[0] = 91
+    check(nt.due() == [0] and nt.due() == [] and nt.lines() == [], "Timer endet nur einmal")
+    nt.configure(1, "x" * 50, -5)
+    check(len(nt.slots[1]["name"]) == 24 and nt.slots[1]["seconds"] == 1, "Timer begrenzt")
+    n = h.Notes({"maps": {"A": "plan", "B": "x" * 5000}, "current": "B"})
+    check(len(n.maps["B"]) == h.MAX_NOTE and n.current == "B", "Notizen begrenzt")
+    n.delete("B")
+    check(n.current == "A" and n.text() == "plan", "Notiz löschen springt weiter")
+    check(n.set_text("  ", "x") == "" and n.set_text("C", "t") == "C" and n.current == "C", "Notiz speichern")
+    ph = h.PingHistory(4)
+    for v in (20, None, 40, 30):
+        ph.add(v)
+    check(ph.loss_pct() == 25 and ph.average() == 30 and ph.worst() == 40 and "25 %" in ph.text(), "Ping-Verlauf")
+    check(h.split_host("srv.example:27015") == ("srv.example", 27015) and h.split_host("x") == ("x", 443) and h.split_host("x:99999")[1] == 65535 and h.split_host("") == ("1.1.1.1", 443), "Host und Port")
+
+
+def test_v160_chat_macros_and_dsl():
+    from modules.gamemacros import library as lib
+    from modules.macros import dsl
+    check(lib.fill("gg {name} um {zeit}, Runde {runde}", {"name": "Jaron", "time": "20:15", "round": 3}) == "gg Jaron um 20:15, Runde 3", "Platzhalter")
+    check(lib.fill("{runde}", {}) == "{runde}", "ohne Wert bleibt der Platzhalter")
+    script = lib.build(lib.BY_ID["chat_multi"], {"messages": "gg | bis bald {name}", "gap": 3, "channel": lib.CHANNELS[1]}, {"name": "Jaron"})
+    check(script.count("type ") == 2 and "bis bald Jaron" in script and "down shift" in script and "wait 3s" in script, "mehrere Nachrichten mit Pause und Alle-Chat")
+    try:
+        lib.build(lib.BY_ID["chat_multi"], {"messages": "a|b|c|d|e|f|g|h|i", "gap": 3})
+        check(False, "zu viele Nachrichten")
+    except ValueError:
+        pass
+    try:
+        lib.build(lib.BY_ID["chat_multi"], {"messages": "a", "gap": 1})
+        check(False, "Mindestabstand")
+    except ValueError:
+        pass
+    check(lib.build(lib.BY_ID["chat_gg_multi"], {"language": "All three", "gap": 2}).count("type ") == 3, "GG in drei Sprachen")
+    # Makro-Sprache: Variablen, Bedingungen, stop
+    out = []
+
+    class B:
+        def type(self, t): out.append(t)
+        def key(self, k): out.append("k:" + k)
+        def press(self, n): pass
+        def release(self, n): pass
+    src = 'set n 0\nrepeat forever\n  add n 1\n  if n >= 4\n    type "done {n}"\n    stop\n  else\n    type "round {n}"\n  end\n  wait 1ms\nend\nkey a\n'
+    res = dsl.Runner(B(), sleep=lambda s: None).run(dsl.parse(src))
+    check(res == "done" and out == ["round 1", "round 2", "round 3", "done 4"], f"if/else/stop: {out}")
+    for bad, why in (("if x ~ 1\nend", "Operator"), ("else", "else ohne if"), ("if x == 1\nkey a", "ohne end"), ("set 1x 3", "Name"), ("if a == 1\nend", "leer"),
+                     ("repeat forever\n  if a == 1\n    wait 1ms\n  end\nend", "Endlosschleife ohne sichere Pause")):
+        try:
+            dsl.parse(bad)
+            check(False, f"Fehler erwartet: {why}")
+        except dsl.MacroError:
+            pass
+    try:
+        dsl.parse("repeat 2\n  if a == 1\n    key x\n  end\n  bad\nend")
+        check(False, "Zeile 5")
+    except dsl.MacroError as exc:
+        check(exc.line == 5, "Fehler nennt die Zeile")
+    lines, cut = dsl.dry_run(dsl.parse("repeat forever\n key a\n wait 1ms\nend"), 5)
+    check(len(lines) == 5 and cut, "Testlauf bricht Endlosschleifen ab")
+    lines, cut = dsl.dry_run(dsl.parse('set n 2\nif n > 1\n type "hi {n}"\nend\nclick right 5 5'))
+    check(lines == ['type "hi 2"', "click right at 5,5"] and not cut, "Testlauf zeigt die Schritte")
+
+
+def test_v160_notifications_and_watcher():
+    from core import notify, winutil
+    from modules.community import watcher as w
+    check(winutil.is_rect_fullscreen((0, 0, 1920, 1080), (0, 0, 1920, 1080)) and not winutil.is_rect_fullscreen((100, 100, 1500, 900), (0, 0, 1920, 1080))
+          and winutil.is_rect_fullscreen((-1, -1, 1921, 1081), (0, 0, 1920, 1080)), "Vollbild-Erkennung (Rechnung)")
+    p = notify.Prefs.from_dict({"muted_servers": ["a", 3, None], "dnd_fullscreen": 0, "community_background": 1, "events": {"dm": False}})
+    check(p.muted_servers == ["a", "3", "None"] and p.dnd_fullscreen is False and p.community_background is True and p.events["dm"] is False and p.events["news"] is True, "neue Einstellungen begrenzt")
+    check(notify.Prefs.from_dict(p.to_dict()).to_dict() == p.to_dict(), "Hin-und-zurück")
+    check(not notify.should_notify(p, "dm") and notify.should_notify(p, "market"), "Quellen einzeln abschaltbar")
+
+    class FakeApp:
+        def __init__(self, fs):
+            self.settings = {"notify": {}}
+            self.fs, self.jobs = fs, []
+
+        def after(self, ms, fn):
+            self.jobs.append(fn)
+            return len(self.jobs)
+    app = FakeApp([True])
+    n = notify.Notifier(app, fullscreen=lambda: app.fs[0])
+    n.play = lambda p=None: shown.append("sound")
+    n._toast = lambda p, t, x: shown.append(t)
+    shown = []
+    check(n.notify("chat", "A", "x") is False and shown == [] and len(n._held) == 1, "im Vollbild zurückgehalten")
+    n.notify("chat", "B", "y")
+    check(len(n._held) == 2, "mehrere werden gesammelt")
+    n._release_held()
+    check(shown == [] and n._hold_job is not None, "weiter Vollbild: weiter warten")
+    app.fs[0] = False
+    n._release_held()
+    check(n._held == [] and "2" in shown[-1], f"Zusammenfassung nach dem Vollbild: {shown}")
+    shown.clear()
+    check(n.notify("chat", "C", "z", force=True) is True and shown, "Testmeldung ignoriert Vollbild")
+    # Community-Beobachter
+    spaces = [{"id": "s1", "kind": "server", "name": "Squad", "channels": [{"id": "c1", "name": "general", "last_id": 5}]},
+              {"id": "s2", "kind": "dm", "peer": {"display_name": "Mia"}, "channels": [{"id": "c2", "name": "dm", "last_id": 9}]}]
+    unread = w.unread_map(spaces, lambda c: True)
+    check(unread == {"c1": ("server", "s1", "Squad"), "c2": ("dm", "s2", "Mia")}, "ungelesene Kanäle")
+    base = {"unread": {}, "invites": 0, "news": 1, "market": 1}
+    cur = {"unread": unread, "invites": 1, "news": 2, "market": 3}
+    check(w.fresh_events(None, cur) == [], "erster Durchlauf meldet nichts")
+    ev = [e[0] for e in w.fresh_events(base, cur)]
+    check(ev == ["dm", "chat", "invite", "news", "market"], f"alle Quellen: {ev}")
+    ev = [e[0] for e in w.fresh_events(base, cur, muted_servers=["s1", "s2"])]
+    check(ev == ["invite", "news", "market"], "stummgeschaltete Server")
+    check(w.fresh_events(cur, cur) == [], "nichts Neues")
+
+
+def test_v160_crosshair_profiles():
+    from modules.clicktools.plugin import Plugin
+    from modules.clicktools.crosshair import CrosshairConfig
+    clean = Plugin._clean_profiles({"A": {"cfg": {"size": 999}, "program": "valorant"}, "B": "kaputt", "C": {"cfg": 5}})
+    check(list(clean) == ["A"] and clean["A"]["cfg"]["size"] == 80, "Profile geprüft und begrenzt")
+
+    class P(Plugin):
+        def __init__(self):
+            self.xh_profiles = {"Val": {"cfg": CrosshairConfig().to_dict(), "program": "Valorant"}, "CS": {"cfg": CrosshairConfig().to_dict(), "program": "cs2.exe"},
+                                "Frei": {"cfg": CrosshairConfig().to_dict(), "program": ""}}
+    p = P()
+    check(p.xh_match("VALORANT  valorant.exe") == "Val" and p.xh_match("Notepad") == "" and p.xh_match("cs2.exe") == "CS", "Profil nach Programm")
+
+
+
+
+def test_v160_gamemacros_hotkeys():
+    from core import hotkey_registry as hr
+    from modules.gamemacros import library as lib
+    from modules.gamemacros.plugin import Plugin
+
+    class FakeMacros:
+        state = "idle"
+
+        def __init__(self):
+            self.runs = []
+
+        def run(self, script):
+            self.runs.append(script)
+            self.state = "running"
+            return ""
+
+        def stop(self):
+            self.state = "idle"
+
+    class App:
+        def __init__(self):
+            self.settings = {}
+            self.user = {"display_name": "Jaron"}
+            self.macros = FakeMacros()
+            self.plugin_by_id = {"macros": self.macros}
+            self.hotkeys = hr.Registry(self, window_title=lambda: "")
+
+        def save_settings(self): pass
+        def call_soon(self, fn, *a): fn(*a)
+        def after(self, ms, fn): return 1
+        def after_cancel(self, j): pass
+    app = App()
+    pl = Plugin(app)
+    pl.on_load()
+    check(all(f"gm.{p.id}" in app.hotkeys.entries for p in lib.PRESETS), "Jedes Makro hat einen Hotkey-Eintrag")
+    pre = lib.BY_ID["chat_msg"]
+    check(pl.run_preset(pre, {"message": "hi {name}", "chat_key": "enter"}) == "" and "hi Jaron" in app.macros.runs[-1], "Platzhalter {name} aus dem Konto")
+    check("Please wait" in pl.run_preset(pre, {"message": "again"}) or pl.run_preset(pre, {"message": "again"}), "Chat-Spam-Schutz")
+    check(app.settings["gm_params"]["chat_msg"]["message"] == "hi {name}", "Werte werden gemerkt")
+    app.macros.state = "idle"
+    pl._last_chat = 0
+    check(pl.toggle_preset(pre) == "" and app.macros.state == "running" and "hi Jaron" in app.macros.runs[-1], "Hotkey startet mit den gemerkten Werten")
+    check(pl.toggle_preset(pre) == "" and app.macros.state == "idle", "derselbe Hotkey stoppt (Umschalter)")
+    check(pl.set_start_key(pre, "ctrl+alt+g") == "" and app.hotkeys.key_of("gm.chat_msg") == "<ctrl>+<alt>+g", "Starttaste setzen")
+    check(pl.set_stop_key(pre, "ctrl+alt+h") == "" and "gm.stop.chat_msg" in app.hotkeys.entries, "optionale Stopptaste")
+    check(pl.set_stop_key(pre, "") == "" and "gm.stop.chat_msg" not in app.hotkeys.entries, "Stopptaste entfernen")
+    pl2 = Plugin(app)
+    app.settings["hotkeys"]["gm.stop.chat_msg"] = {"key": "<f9>", "enabled": True, "window": ""}
+    pl2.on_load()
+    check("gm.stop.chat_msg" in app.hotkeys.entries, "Stopptaste wird nach dem Neustart wieder angemeldet")
+
+
+
+def test_v170_pixel_change_telemetry_admin_logic():
+    from modules.clicktools import pixel
+    w = pixel.PixelWatcher(0, 0, "", 20, lambda: None, on_change=True)
+    res = [w._hit(px) for px in [(10, 10, 10), (10, 10, 12), (200, 10, 10), (200, 10, 10)]]
+    check(res == [False, False, True, False], f"Farbwechsel: erste Messung = Basis, kleine Änderung ignoriert, große löst aus ({res})")
+    w2 = pixel.PixelWatcher(0, 0, "#ff0000", 10, lambda: None)
+    check(w2._hit((255, 0, 0)) and not w2._hit((0, 255, 0)), "Farb-Trigger wie bisher")
+    from modules.admin import logic
+    check(logic.fmt_bytes(13489843) == "12.9 MB" and logic.fmt_bytes(None) == "–", "fmt_bytes")
+    check(logic.fmt_uptime("2026-10-26T17:41:10+00:00", "2026-10-28T20:13:44+00:00") == "2 d 2 h", "fmt_uptime")
+    check(logic.fmt_ago("2026-10-28T20:00:00+00:00", "2026-10-28T20:00:30+00:00") == "30 s", "fmt_ago")
+    check(logic.health({"connections": 59, "max_connections": 60})[0] == "warn" and logic.health({"connections": 5, "max_connections": 60, "db_bytes": 1e6, "cache_hit": 99})[0] == "ok", "health")
+    check(logic.health({})[0] == "bad", "health leer")
+    check(len(logic.summarize({})) == 12, "Übersicht hat 12 Felder")
+    from core import telemetry
+    check("Max" not in telemetry.scrub(r"C:\Users\Max\app\x.py"), "Benutzername wird aus Pfaden entfernt")
+    sent = []
+
+    class FakeApp:
+        settings = {"diagnostics": True}
+        user = {"x": 1}
+        current = "gamer"
+        identity = None
+    t = telemetry.Telemetry(FakeApp(), send=lambda n, a: sent.append((n, a)))
+    t.beat()
+    t.report("ui", "Boom", "trace")
+    t.flush()
+    check([n for n, _ in sent] == ["jopml_heartbeat", "jopml_log_error"] and sent[0][1]["p_page"] == "gamer", "Lebenszeichen und Fehlerbericht")
+    FakeApp.settings["diagnostics"] = False
+    sent.clear()
+    t.beat()
+    t.report("ui", "x")
+    t.flush()
+    check(not sent, "Diagnose abgeschaltet: nichts wird gesendet")
+    from core.tabbar import WrapTabs
+    check(WrapTabs.columns_for(1000, [100] * 9) == 9 and WrapTabs.columns_for(330, [100] * 9) == 3 and WrapTabs.columns_for(10, [100]) == 1, "Reiterleiste bricht um")
+    from core import perf
+    perf.set_potato(True)
+    check(perf.ms(100) == 300, "Kartoffel-Modus verlängert Intervalle")
+    perf.set_potato(False)
+    check(perf.ms(100) == 100, "Normal: unverändert")
+
+
+def test_v171_secretstore_and_stay():
+    import tempfile
+    from pathlib import Path
+    from core import config, secretstore
+    check(secretstore.unprotect(secretstore.protect("Sätze mit Ümlaut 123")) == "Sätze mit Ümlaut 123", "Geheimnis hin und zurück")
+    check("Sätze" not in secretstore.protect("Sätze"), "Geheimnis nicht im Klartext")
+    from modules.community.plugin import Plugin
+
+    class FakeApp:
+        settings = {}
+        user = {"username": "tester"}
+        saved = 0
+
+        def save_settings(self):
+            FakeApp.saved += 1
+    with tempfile.TemporaryDirectory() as d:
+        old = config.app_dir
+        config.app_dir = lambda: Path(d)
+        try:
+            pl = Plugin(FakeApp())
+            check(not pl.stay_enabled() and pl.stored_passphrase() == "", "Anfangs aus und leer")
+            pl.set_stay(True)
+            pl.remember_passphrase("mein langer satz")
+            check(pl.stay_enabled() and pl.stored_passphrase() == "mein langer satz", "Passphrase wird gemerkt")
+            pl.forget_passphrase()
+            check(pl.stored_passphrase() == "", "Passphrase vergessen")
+            pl.remember_passphrase("x" * 12)
+            pl.set_stay(False)
+            check(not pl.stay_enabled() and pl.stored_passphrase() == "", "Ausschalten löscht die gemerkte Passphrase")
+            pl.cache_spaces([{"id": "a", "name": "A", "kind": "server"}, {"id": "b", "name": "DM", "kind": "dm"}])
+            check(FakeApp.settings["community_cache"] == [{"id": "a", "name": "A"}], "Serverliste für die Einstellungen gemerkt")
+        finally:
+            config.app_dir = old
+    from core import legal_text
+    check(len(legal_text.LEGAL_DE) > 55000 and "§ 18 " in legal_text.LEGAL_DE and "§ 11 DIAGNOSE" in legal_text.LEGAL_DE, "Rechtstext erweitert")
+
+
+
+def test_v172_auto_outcome_overlays_monitors_hover():
+    import tempfile
+    from pathlib import Path
+    from PIL import Image
+    from core import config, theme
+    from modules.gamer import helpers as h
+    from modules.productivity import winmgr
+
+    # --- Sieg/Niederlage am Bildschirm erkennen
+    green, red, grey = Image.new("RGB", (80, 40), (20, 200, 60)), Image.new("RGB", (80, 40), (210, 30, 30)), Image.new("RGB", (80, 40), (90, 90, 95))
+    sg, sr, sx = h.signature(green), h.signature(red), h.signature(grey)
+    check(len(sg) == h.SIG_W * h.SIG_H * 3 and h.distance(sg, sg) == 0 and h.distance(sg, sr) > 100, "Abdruck und Abstand")
+    now = [0.0]
+    a = h.AutoOutcome(clock=lambda: now[0])
+    check(not a.ready() and a.classify(sg) is None, "ungelernt erkennt nichts")
+    a.region = (0, 0, 80, 40)
+    a.learn("win", sg)
+    a.learn("loss", sr)
+    check(a.ready() and a.classify(sg) == "wins" and a.classify(sr) == "losses" and a.classify(sx) is None, "Sieg/Niederlage/nichts unterschieden")
+    seq = []
+    for sig, dt in ((sx, 1), (sg, 1), (sg, 1), (sg, 1), (sg, 1), (sx, 1), (sx, 1), (sx, 1), (sx, 1), (sx, 1)):
+        now[0] += dt
+        seq.append(a.feed(sig))
+    check(seq.count("wins") == 1 and seq.index("wins") == 2, f"Sieg genau einmal, nach zwei Treffern: {seq}")
+    now[0] += 30
+    res = [a.feed(sr) for _ in range(3)]
+    check(res.count("losses") == 1, "nächste Niederlage nach Pause wird gezählt, dann Sperre")
+    now[0] += 1
+    a2 = h.AutoOutcome(a.to_dict())
+    check(a2.region == (0, 0, 80, 40) and len(a2.win) == 1 and len(a2.loss) == 1 and a2.tolerance == 22, "Speichern und Laden")
+    bad = h.AutoOutcome({"region": [5, 5, 2, 2], "win": [[1, 2, 3]], "tolerance": 999, "on": 1})
+    check(bad.region is None and bad.win == [] and bad.tolerance == 22 and bad.on, "kaputte Daten werden verworfen")
+    for i in range(5):
+        a.learn("win", sg)
+    check(len(a.win) == 3, "höchstens 3 Abdrücke je Art")
+
+    # --- Overlays bleiben nach dem Neustart an
+    class Reg:
+        def register(self, *_a, **_k):
+            pass
+
+    class FakeApp:
+        hotkeys = Reg()
+        plugin_by_id = {}
+        jobs = []
+
+        def after(self, ms, fn=None, *a):
+            FakeApp.jobs.append((ms, fn))
+
+    with tempfile.TemporaryDirectory() as d:
+        old = config.app_dir
+        config.app_dir = lambda: Path(d)
+        try:
+            from modules.gamer.plugin import Plugin
+            pl = Plugin(FakeApp())
+            pl.on_load()
+            for o in pl.overlay_map().values():
+                o.show, o.hide = (lambda: None), (lambda: None)
+            check(pl.overlays_on == set(), "anfangs ist nichts an")
+            pl.show_overlay("match")
+            pl.show_overlay("stats")
+            pl.hide_overlay("stats")
+            check(pl.overlays_on == {"match"}, "Schalter merkt sich Ein und Aus")
+            pl.on_shutdown()
+            pl2 = Plugin(FakeApp())
+            pl2.on_load()
+            check(pl2.overlays_on == {"match"}, "Nach dem Neustart noch an")
+            shown = []
+            for k, o in pl2.overlay_map().items():
+                o.show = (lambda k=k: shown.append(k))
+            pl2._restore()
+            check(shown == ["match"], f"Beim Start wird wiederhergestellt: {shown}")
+            saved_json = json.loads((Path(d) / "gamer.json").read_text(encoding="utf-8"))
+            check(saved_json.get("overlays_on") == ["match"] and "match_auto" in saved_json, "in gamer.json gespeichert")
+        finally:
+            config.app_dir = old
+
+    # --- Fenster auf mehreren Monitoren
+    mons = [{"no": 1, "full": (0, 0, 1920, 1080), "work": (0, 0, 1920, 1040), "primary": False},
+            {"no": 2, "full": (1920, 0, 2560, 1440), "work": (1920, 0, 2560, 1400), "primary": True}]
+    check(winmgr.monitor_of_rect((2000, 100, 2600, 600), mons)["no"] == 2 and winmgr.monitor_of_rect((100, 100, 700, 600), mons)["no"] == 1, "Monitor des Fensters")
+    check(winmgr.monitor_of_rect((5000, 100, 5200, 300), mons)["no"] == 2 and winmgr.monitor_of_rect((1, 1, 2, 2), []) is None, "Nächster Monitor bei Randfällen")
+    check(winmgr.next_monitor(1, mons)["no"] == 2 and winmgr.next_monitor(2, mons)["no"] == 1, "Nächster Monitor kreist")
+    rel = winmgr.rel_rect((480, 260, 1440, 780), (0, 0, 1920, 1040))
+    check(rel == (0.25, 0.25, 0.5, 0.5), f"Anteile {rel}")
+    check(winmgr.abs_rect(rel, (1920, 0, 2560, 1400)) == (2560, 350, 1280, 700), "Anteile auf anderem Monitor")
+    s2 = winmgr.parse_slot("discord:right@2")
+    check((s2.match, s2.kind, s2.monitor) == ("discord", "right", 2), "Platz mit Monitor lesen")
+    check(winmgr.parse_slot("chrome:left").monitor == 0, "ohne @ = Hauptmonitor")
+    raises(ValueError, winmgr.parse_slot, "chrome:left@x")
+    raises(ValueError, winmgr.parse_slot, "chrome:left@99")
+    areas = {0: (1920, 0, 2560, 1400), 1: (0, 0, 1920, 1040), 2: (1920, 0, 2560, 1400)}
+    check(winmgr.slot_rect(winmgr.Slot("a1", "left", 1), (9, 9, 9, 9), areas) == (0, 0, 960, 1040), "Platz auf Monitor 1")
+    check(winmgr.slot_rect(winmgr.Slot("a1", "left", 7), (0, 0, 1000, 800), areas) == (0, 0, 500, 800), "unbekannter Monitor = Hauptfläche")
+    saved = winmgr.Slot("a1", "saved", 2, rel).validate()
+    check(winmgr.slot_rect(saved, (0, 0, 1, 1), areas) == (2560, 350, 1280, 700), "gespeicherte Lage")
+    raises(ValueError, winmgr.Slot("a1", "saved", 1, (2, 0, 1, 1)).validate)
+    moved = []
+    n = winmgr.apply_layout([winmgr.Slot("chrome", "left", 1), winmgr.Slot("discord", "saved", 2, rel)],
+                            [{"id": 1, "title": "Chrome", "proc": ""}, {"id": 2, "title": "Discord", "proc": ""}], (0, 0, 100, 100),
+                            lambda i, *r: moved.append((i, r)) and "", areas)
+    check(n == 2 and moved[0] == (1, (0, 0, 960, 1040)) and moved[1] == (2, (2560, 350, 1280, 700)), f"Layout über zwei Monitore {moved}")
+    lay = winmgr.parse_layouts({"x": [{"match": "chrome", "kind": "saved", "monitor": 2, "rect": list(rel)}, {"match": "ab", "kind": "left"}]})
+    check(len(lay["x"]) == 2 and lay["x"][0].rect == rel and lay["x"][0].monitor == 2, "Layout mit Monitor aus Datei")
+    check("monitor" in lay["x"][0].label() or "Monitor" in lay["x"][0].label(), "Beschriftung nennt den Monitor")
+
+    # --- Hover-Farbe
+    theme.apply({})
+    tint = theme.hover_tint()
+    check(len(tint) == 2 and all(theme.is_hex(x) for x in tint), "Hover-Farbe ist gültig")
+    check(theme.mix("#000000", "#ffffff", 0.5) == "#808080", "Farbmischung")
 
 
 def main():

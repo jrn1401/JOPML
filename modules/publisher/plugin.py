@@ -8,6 +8,7 @@ class Plugin(BasePlugin):
     icon = "⬆"
     version = "1.0.0"
     order = 90
+    nav = False                # steckt jetzt als Reiter im Admin-Modul
     admin_only = True          # nur sichtbar, wenn der Server das Konto als Admin bestätigt hat
     description = "Upload new versions for all users (admin only)."
 
