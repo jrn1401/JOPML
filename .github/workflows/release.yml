@@ -26,7 +26,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
-      - run: python -m pip install pillow
+      - run: python -m pip install pillow cryptography
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
       - name: Python-Tests (mit Attrappen, ohne Fenster)
         run: python tests/test_all.py
       - name: Supabase-Migration gegen echte PostgreSQL prüfen
