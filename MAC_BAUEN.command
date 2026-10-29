@@ -12,7 +12,7 @@ pip install -q -r requirements.txt pyinstaller
 python tools/make_icon.py
 python -c "from PIL import Image; Image.open('build/icon.png').convert('RGBA').resize((1024,1024)).save('build/icon.icns')"
 pyinstaller --noconfirm --clean --windowed --name JOPML --icon build/icon.icns --osx-bundle-identifier de.jopml.launcher \
-  --collect-all customtkinter --collect-submodules pynput $(python tools/pyi_args.py) main.py
+  --collect-all customtkinter --collect-all lupa --collect-submodules pynput $(python tools/pyi_args.py) main.py
 dist/JOPML.app/Contents/MacOS/JOPML --selftest "$PWD/selftest.txt" || true
 cat selftest.txt
 if grep -q '^FAIL' selftest.txt; then echo "Selbsttest fehlgeschlagen – Abbruch."; exit 1; fi

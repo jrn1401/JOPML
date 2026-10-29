@@ -15,7 +15,7 @@ from pathlib import Path
 from core.i18n import tr
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,30}$")
-ALLOWED_EXT = {".py", ".json", ".txt", ".md", ".png", ".gif", ".ico", ".csv"}
+ALLOWED_EXT = {".py", ".json", ".txt", ".md", ".png", ".gif", ".ico", ".csv", ".lua"}
 MAX_FILES, MAX_FILE_BYTES, MAX_TOTAL_BYTES = 200, 2 * 1024 * 1024, 8 * 1024 * 1024
 RESERVED = {"core", "modules", "tests", "tools", "jopml_user"}
 
@@ -206,5 +206,77 @@ def remove_module(name: str, root: Path | None = None) -> bool:
     target = root / name
     if target.is_dir() and target.parent == root:
         shutil.rmtree(target, ignore_errors=True)
+        return True
+    return False
+
+
+# ---------------------------------------------------------------- Lua-Skripte (Modul "Lua scripts")
+LUA_MAX_BYTES = 300_000
+
+
+def lua_dir() -> Path:
+    from core import config
+    d = config.app_dir() / "lua_scripts"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def lua_scripts(root: Path | None = None) -> list[str]:
+    root = root or lua_dir()
+    return sorted(p.stem for p in root.glob("*.lua") if NAME_RE.match(p.stem)) if root.exists() else []
+
+
+def check_lua_text(text: str) -> None:
+    """Wirft ImportErrorJOPML, wenn das kein ladbarer Lua-Text ist (Größe, Binärdaten, Vorab-Bytecode)."""
+    if not isinstance(text, str) or not text.strip():
+        raise ImportErrorJOPML(tr("The script is empty."))
+    if len(text.encode("utf-8")) > LUA_MAX_BYTES:
+        raise ImportErrorJOPML(tr("The script is too large (at most 300 KB)."))
+    if "\x00" in text or text.startswith("\x1bLua"):
+        raise ImportErrorJOPML(tr("Only Lua source text can be added, not compiled Lua."))
+
+
+def read_lua_file(path) -> str:
+    p = Path(path)
+    if p.suffix.lower() not in (".lua", ".txt"):
+        raise ImportErrorJOPML(tr("Choose a .lua or .txt file."))
+    if p.stat().st_size > LUA_MAX_BYTES:
+        raise ImportErrorJOPML(tr("The script is too large (at most 300 KB)."))
+    try:
+        text = p.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError:
+        raise ImportErrorJOPML(tr("Only Lua source text can be added, not compiled Lua."))
+    check_lua_text(text)
+    return text
+
+
+def import_lua_script(text: str, name: str, replace: bool = False, root: Path | None = None) -> str:
+    """Speichert ein Lua-Skript als <name>.lua. Gibt den Namen zurück."""
+    if not NAME_RE.match(name or ""):
+        raise ImportErrorJOPML(tr("The module name must be 2-31 characters: lowercase letters, digits and _, starting with a letter."))
+    check_lua_text(text)
+    root = root or lua_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    target = root / f"{name}.lua"
+    if target.exists() and not replace:
+        raise ImportErrorJOPML(tr("A script with this name already exists."))
+    target.write_text(text, encoding="utf-8")
+    return name
+
+
+def read_lua(name: str, root: Path | None = None) -> str:
+    root = root or lua_dir()
+    if not NAME_RE.match(name or "") or not (root / f"{name}.lua").is_file():
+        raise ImportErrorJOPML(tr("This script cannot be found."))
+    return (root / f"{name}.lua").read_text(encoding="utf-8")
+
+
+def remove_lua(name: str, root: Path | None = None) -> bool:
+    root = root or lua_dir()
+    if not NAME_RE.match(name or ""):
+        return False
+    p = root / f"{name}.lua"
+    if p.is_file():
+        p.unlink()
         return True
     return False

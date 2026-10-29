@@ -39,7 +39,7 @@ if errorlevel 1 (
 .venv-build\Scripts\python tools\make_icon.py
 set "PYIARGS="
 for /f "delims=" %%A in ('.venv-build\Scripts\python tools\pyi_args.py') do set "PYIARGS=%%A"
-.venv-build\Scripts\pyinstaller --noconfirm --clean --noconsole --onefile --name JaronsOPMakro --icon build\icon.ico --collect-all customtkinter --collect-submodules pynput %PYIARGS% main.py
+.venv-build\Scripts\pyinstaller --noconfirm --clean --noconsole --onefile --name JaronsOPMakro --icon build\icon.ico --collect-all customtkinter --collect-all lupa --collect-submodules pynput %PYIARGS% main.py
 if errorlevel 1 (
   echo Build fehlgeschlagen. Meldung oben lesen.
   pause

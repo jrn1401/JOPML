@@ -600,9 +600,29 @@ class SettingsView(ctk.CTkFrame):
             ctk.CTkButton(br, text=tr("Import"), width=150, command=save).pack(side="left", padx=6)
 
         def pick_file():
-            path = filedialog.askopenfilename(filetypes=[(tr("Modules"), "*.zip *.py")])
-            if path:
+            path = filedialog.askopenfilename(filetypes=[(tr("Modules"), "*.zip *.py *.lua")])
+            if not path:
+                return
+            if path.lower().endswith(".lua"):
+                add_lua(path)
+            else:
                 do_import(path)
+
+        def add_lua(path=None):
+            path = path or filedialog.askopenfilename(filetypes=[(tr("Lua scripts"), "*.lua *.txt")])
+            if not path:
+                return
+            try:
+                text = module_import.read_lua_file(path)
+                name = module_import.clean_name(path)
+                replace = name in module_import.lua_scripts()
+                if replace and not messagebox.askyesno(tr("Add script"), tr("A script named {n} already exists. Replace it?", n=name)):
+                    return
+                module_import.import_lua_script(text, name, replace=replace)
+            except (module_import.ImportErrorJOPML, OSError) as exc:
+                self._say(msg, str(exc), False)
+                return
+            self._say(msg, tr("Script {n} added. Start it in the menu item 'Lua scripts'.", n=name))
 
         def pick_folder():
             path = filedialog.askdirectory()
@@ -613,6 +633,7 @@ class SettingsView(ctk.CTkFrame):
         ctk.CTkButton(r, text=tr("Import file …"), width=150, command=pick_file).pack(side="left")
         ctk.CTkButton(r, text=tr("Import folder …"), width=150, command=pick_folder).pack(side="left", padx=8)
         ctk.CTkButton(r, text=tr("Add from code …"), width=150, command=code_dialog).pack(side="left")
+        ctk.CTkButton(r, text=tr("Add Lua script …"), width=150, command=lambda: add_lua()).pack(side="left", padx=8)
         listing.pack(fill="x", pady=(6, 0))
         render()
 

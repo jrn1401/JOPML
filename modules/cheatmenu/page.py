@@ -35,7 +35,7 @@ GTA 5 Enhanced (nur Story-Modus)
 Rückstoß-Trainer
 • Im Übungsfeld klicken und halten: Jeder Schuss reißt das Ziel nach oben. Zieh die Maus dagegen, damit die Treffer im blauen Ziel bleiben.
 • Die gestrichelte Hilfslinie zeigt, wohin die Maus müsste. Für echtes Training später ausschalten.
-• Bestenliste: Eine volle Runde (alle 30 Schüsse) mit Standardwerten (Stärke 1, 10 Schuss/s, Hilfslinie aus) geht automatisch an die Bestenliste des Musters in Community > Bestenlisten, wenn du ein Cloud-Konto und die Community eingerichtet hast. Die Punkte kommen von deinem Programm; der Server kann den Spielverlauf nicht prüfen.
+• Bestenliste: Der Haken „Bestenliste“ (standardmäßig an) stellt feste Standardwerte ein (Stärke 1, 10 Schuss/s, Hilfslinie aus). Eine volle Runde (alle 30 Schüsse) geht dann automatisch an die Bestenliste des Musters in Community > Bestenlisten, wenn du ein Cloud-Konto und die Community eingerichtet hast. Die Punkte kommen von deinem Programm; der Server kann den Spielverlauf nicht prüfen.
 • Der Trainer liest die Maus nur im eigenen Feld und gibt selbst keine Eingaben ab – er trainiert deine Hand und wirkt nicht in Spielen.
 
 Notaus und F7 aus dem Makro-Modul stoppen auch die Minecraft-Cheats."""
@@ -189,7 +189,25 @@ class CheatMenuPage(ctk.CTkFrame):
 
         guide = ctk.CTkCheckBox(top, text="Hilfslinie", command=lambda: setattr(canvas, "show_guide", bool(guide.get())))
         guide.select()
-        guide.pack(side="left")
+        guide.pack(side="left", padx=(0, 14))
+
+        def ranked_changed():
+            """Bestenlisten-Runde: feste Standardwerte (Stärke 1, 10 Schuss/s, keine Hilfslinie), damit alle gleich spielen."""
+            on = bool(ranked.get())
+            if on:
+                canvas.strength, canvas.rate, canvas.show_guide = 1.0, 10, False
+                st.set(1.0)
+                rt.set(10)
+                guide.deselect()
+            for w in (st, rt, guide):
+                w.configure(state="disabled" if on else "normal")
+            self._show_best()
+
+        ranked = ctk.CTkCheckBox(top, text="Bestenliste", command=ranked_changed)
+        ranked.select()
+        ranked.pack(side="left")
+        self.ranked = ranked
+        ranked_changed()
         desc.pack(fill="x", before=holder, pady=(0, 4))
         pick(canvas.pattern_name)
 
@@ -225,6 +243,11 @@ class CheatMenuPage(ctk.CTkFrame):
             return
         kind = trainer.board_kind(res["pattern"], res["shots"], canvas.strength, canvas.rate, canvas.show_guide)
         if not kind:
+            if res["shots"] < trainer.SHOTS:
+                why = "Nicht für die Bestenliste gezählt: Die Runde wurde vor dem letzten Schuss beendet (alle 30 Schüsse nötig)."
+            else:
+                why = "Nicht für die Bestenliste gezählt: Dafür den Haken „Bestenliste“ setzen (feste Standardwerte, keine Hilfslinie)."
+            self._say(why, False)
             return
         app = self.plugin.app
         comm = app.plugin_by_id.get("community")

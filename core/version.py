@@ -1,6 +1,6 @@
 APP_NAME = "Jaron's OP Makro"      # Anzeigename (Fenstertitel, Seitenleiste)
 APP_ID = "JaronsOPMakro"           # Dateiname der EXE und Ordnername für Einstellungen (ohne Sonderzeichen)
-APP_VERSION = "1.7.8"
+APP_VERSION = "1.7.9"
 SHORT_NAME = "JOPML"               # Kürzel, das im App-Icon immer sichtbar bleibt
 
 # Hier liegt die version.json (GitHub-Release "latest")

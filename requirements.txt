@@ -4,3 +4,4 @@ Pillow>=10.0.0
 certifi>=2024.2.2
 cryptography>=42.0.0
 psutil>=5.9.0
+lupa>=2.0

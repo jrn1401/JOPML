@@ -20,6 +20,10 @@ def stop_everything(app) -> list[str]:
                 if mk is not None and (mk.holding or mk.scrolling or mk.afk_running):
                     mk.stop_all()
                     stopped.append(p.id)
+            elif p.id == "luascripts":
+                if getattr(p, "running", False):
+                    p.stop()
+                    stopped.append(p.id)
             elif p.id == "macros":
                 if getattr(p, "state", "") == "running":
                     p.stop()

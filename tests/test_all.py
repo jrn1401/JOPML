@@ -2472,6 +2472,164 @@ def test_v177_module_share_client():
         raises(CommunityError, modshare.collect_installed, "gibtsnicht", root=root)
 
 
+def test_v179_lua_scripts():
+    import types
+    from core import module_import as mi
+    root = Path(tempfile.mkdtemp(dir=TMP))
+    check(mi.import_lua_script("print('hi')", "hallo", root=root) == "hallo" and mi.lua_scripts(root) == ["hallo"], "Skript gespeichert")
+    check(mi.read_lua("hallo", root) == "print('hi')", "Skript gelesen")
+    raises(mi.ImportErrorJOPML, mi.import_lua_script, "x=1", "hallo", root=root)                 # existiert schon
+    mi.import_lua_script("x=2", "hallo", replace=True, root=root)
+    for bad, name in (("", "leer"), ("   ", "leer"), ("a" * 300_001, "gross"), ("\x1bLuaabc", "byte"), ("x\x00y", "nul"), ("x=1", "Bad Name"), ("x=1", "a")):
+        raises(mi.ImportErrorJOPML, mi.import_lua_script, bad, name, root=root)
+    raises(mi.ImportErrorJOPML, mi.read_lua, "../x", root)
+    f = root / "datei.lua"
+    f.write_text("\ufeffprint(1)", encoding="utf-8")
+    check(mi.read_lua_file(f) == "print(1)", "BOM wird entfernt")
+    (root / "x.exe").write_bytes(b"MZ")
+    raises(mi.ImportErrorJOPML, mi.read_lua_file, root / "x.exe")
+    check(mi.remove_lua("hallo", root) and not mi.remove_lua("hallo", root) and not mi.remove_lua("../x", root), "Skript entfernt")
+    check(".lua" in mi.ALLOWED_EXT, ".lua in Modul-Ordnern erlaubt")
+
+    from modules.luascripts import runner
+    real = sys.modules.pop("lupa", None)
+    lines = []
+    r = runner.LuaRunner("x", lambda t, ok=True: lines.append((t, ok)))
+    try:
+        sys.modules["lupa"] = None                      # Import schlägt fehl -> verständlicher Text statt Absturz
+        check("lupa" in r.start(), "ohne lupa: Meldung")
+        # Attrappe für lupa: prüft die Python-Seite (Sperrliste, wait, macro, Stopp) - NICHT echtes Lua
+        class G(dict):
+            __getattr__ = dict.get
+
+        class Fake:
+            last = None
+            script = None
+            def __init__(self, **kw):
+                self.g = G(debug=object())
+                Fake.last = self
+            def globals(self):
+                return self.g
+            def eval(self, code):
+                return lambda *a: None
+            def execute(self, text):
+                Fake.script(self.g)
+        fake = types.ModuleType("lupa")
+        fake.LuaRuntime = Fake
+        sys.modules["lupa"] = fake
+
+        class Macros:
+            state = "idle"
+            def __init__(self): self.ran, self.stopped = [], False
+            def run(self, text):
+                self.ran.append(text)
+                return "bad macro" if text == "boom" else ""
+            def stop(self): self.stopped = True
+        m = Macros()
+
+        def run_script(fn, timeout=3):
+            lines.clear()
+            Fake.script = fn
+            rr = runner.LuaRunner("x", lambda t, ok=True: lines.append((t, ok)), macros=m, max_seconds=timeout)
+            check(rr.start() == "", "startet")
+            check(rr.finished.wait(5), "Skript endet")
+            return rr
+        run_script(lambda g: (g.wait(10), g.macro("click left 5 5")))
+        check(lines[-1][0] == tr_("Script finished.") and m.ran == ["click left 5 5"], f"normal beendet: {lines}")
+        g = Fake.last.g
+        check(all(g.get(n, "fehlt") is None for n in runner.BLOCKED), "gefährliche Funktionen gesperrt")
+        run_script(lambda g: g.macro("boom"))
+        check(lines[-1][1] is False and "bad macro" in lines[-1][0], f"Makrofehler wird gemeldet: {lines}")
+        run_script(lambda g: g.macro("x" * (runner.MAX_MACRO_CHARS + 1)))
+        check(lines[-1][1] is False, "zu langer Makro-Text abgelehnt")
+        rr = runner.LuaRunner("x", lambda t, ok=True: lines.append((t, ok)), macros=m)
+        Fake.script = lambda g: g.wait(60000)
+        lines.clear()
+        rr.start()
+        time.sleep(0.2)
+        check(rr.running, "läuft")
+        rr.stop()
+        check(rr.finished.wait(3) and lines[-1][0] == tr_("Script stopped.") and m.stopped, f"Stopp wirkt in wait(): {lines}")
+        run_script(lambda g: g.wait(5000), timeout=0.2)
+        check(lines[-1][0] == tr_("Script stopped."), "Zeitlimit beendet das Skript")
+    finally:
+        if real is not None:
+            sys.modules["lupa"] = real
+        else:
+            sys.modules.pop("lupa", None)
+
+
+def test_lua_sandbox_real():
+    """Lua-Skripte mit der ECHTEN Lua-Engine (lupa): Sandbox, Ausbruchsversuche, Speicher-/Zeitgrenze, Stopp.
+    Läuft im CI (dort wird lupa installiert); lokal ohne lupa wird der Test übersprungen."""
+    real = sys.modules.get("lupa")
+    if real is None or not hasattr(real, "LuaRuntime"):
+        sys.modules.pop("lupa", None)
+    try:
+        import lupa  # noqa: F401
+    except Exception:
+        print("  (übersprungen: lupa nicht installiert)")
+        return
+    from modules.luascripts import runner
+
+    class Macros:
+        state = "idle"
+        def __init__(self): self.ran, self.stopped = [], False
+        def run(self, text):
+            self.ran.append(text)
+            return "bad macro" if text == "boom" else ""
+        def stop(self): self.stopped = True
+
+    def run(code, timeout=5, macros=None):
+        lines = []
+        r = runner.LuaRunner(code, lambda t, ok=True: lines.append((t, ok)), macros=macros or Macros(), max_seconds=timeout)
+        check(r.start() == "", "startet")
+        check(r.finished.wait(timeout + 10), f"endet: {code[:60]}")
+        return lines
+
+    out = run('print(1 + 2, "a")')
+    check(out[0] == ("3\ta", True) and out[-1] == (tr_("Script finished."), True), f"print: {out}")
+    m = Macros()
+    out = run('wait(5) macro("click left 1 2") print("ok")', macros=m)
+    check(m.ran == ["click left 1 2"] and ("ok", True) in out, f"wait/macro: {out}")
+    out = run('local ok, e = pcall(macro, "boom") print(type(e), e)')
+    check(out[0][0].startswith("string") and "bad macro" in out[0][0], f"Fehler kommen nur als Text an: {out}")
+    for name in runner.BLOCKED:
+        out = run(f'print(type({name}))')
+        check(out[0] == ("nil", True), f"{name} ist gesperrt: {out}")
+    escapes = [
+        'print(wait.__self__)', 'print(macro.__globals__)', 'print(wait["__self__"])',
+        'local ok, e = pcall(macro, "boom") print(e.__traceback__)',
+        'local ok, e = pcall(wait, "x") print(e.__class__)',
+        'print(type(python))', 'print(string.dump ~= nil and load == nil)',
+        'local t = getmetatable("") print(type(t.__index.dump))',
+    ]
+    for code in escapes:
+        out = run(code)
+        text = " ".join(t for t, _ in out)
+        check("class" not in text and "module" not in text and "function: builtin" not in text.lower()
+              and "<bound method" not in text and "Python" not in text.replace("access to Python objects is not allowed", ""),
+              f"kein Zugriff auf Python: {code} -> {out}")
+    out = run('local s = string.rep("x", 2^31) print(#s)')
+    check(out[-1][1] is False, f"Speichergrenze: {out[-1]}")
+    out = run("while true do end", timeout=1)
+    check(out[-1] == (tr_("Script stopped."), False), f"Endlosschleife: Zeitlimit greift: {out}")
+    out = run("local co = coroutine.wrap(function() while true do end end) co()", timeout=1)
+    check(out[-1] == (tr_("Script stopped."), False), f"Endlosschleife in Coroutine: {out}")
+    lines = []
+    r = runner.LuaRunner("while true do wait(1) end", lambda t, ok=True: lines.append((t, ok)), macros=Macros())
+    r.start()
+    time.sleep(0.3)
+    r.stop()
+    check(r.finished.wait(5) and lines[-1] == (tr_("Script stopped."), False), f"Stopp-Knopf: {lines}")
+    out = run("debug = nil sethook = nil print(1)")
+    check(out[0] == ("1", True), "Skript darf Globale überschreiben, ohne die Sandbox zu stören")
+
+
+def tr_(text):
+    return i18n.tr(text)
+
+
 def main():
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0
@@ -2482,6 +2640,9 @@ def main():
         except Exception:
             failed += 1
             print(f"  FAIL {name}\n{traceback.format_exc()}")
+            if os.environ.get("GITHUB_ACTIONS"):          # im CI als Anmerkung sichtbar (auch ohne Zugriff auf das Log)
+                last = traceback.format_exc().strip().splitlines()[-1][:900].replace("%", "%25").replace("\r", "").replace("\n", " ")
+                print(f"::error title=Test {name}::{last}")
     print(f"\n{len(tests) - failed}/{len(tests)} Tests bestanden")
     return 1 if failed else 0
 

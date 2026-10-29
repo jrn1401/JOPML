@@ -64,6 +64,10 @@ def discover(app):
     for reserved in ("dashboard", "settings", "assistant", "contact"):
         owner.setdefault(reserved, reserved)
     for name, plugin in user_plugins:           # importierte Module dürfen kein eingebautes Modul ersetzen
+        from core.plugin_api import BasePlugin
+        if not isinstance(plugin, BasePlugin):
+            failed.append((name, tr("The Plugin class must inherit from BasePlugin (from core.plugin_api import BasePlugin).")))
+            continue
         pid = getattr(plugin, "id", None)
         if not isinstance(pid, str) or not pid.strip():
             failed.append((name, tr("The module has no valid id. Set a text id in the Plugin class (id = \"my_module\").")))
@@ -73,5 +77,5 @@ def discover(app):
             continue
         owner[pid] = plugin.name
         plugins.append(plugin)
-    plugins.sort(key=lambda p: (p.order, p.name))
+    plugins.sort(key=lambda p: (p.order if isinstance(p.order, (int, float)) else 200, str(p.name)))
     return plugins, failed

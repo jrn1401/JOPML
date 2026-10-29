@@ -126,7 +126,7 @@ def from_constants() -> set[str]:
     out.update(["New announcement", "New macro in the marketplace", "No pop-ups or sounds while a program is fullscreen (a summary follows afterwards)",
                 "Show community messages even when the Community page is closed or locked"])
     import importlib
-    for mod in ("autoclicker", "macros", "extensions", "community", "clicktools", "gamemacros", "gamer", "productivity"):
+    for mod in ("autoclicker", "macros", "extensions", "luascripts", "community", "clicktools", "gamemacros", "gamer", "productivity"):
         p = importlib.import_module(f"modules.{mod}.plugin").Plugin
         out.update((p.name, p.description))
     # 1.7.0: Admin-Modul (Beschriftungen laufen über Variablen)

@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.13" }
-      - run: python -m pip install pillow cryptography
+      - run: python -m pip install pillow cryptography lupa
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
       - name: Python-Tests (mit Attrappen, ohne Fenster)
@@ -70,7 +70,7 @@ jobs:
       - name: EXE bauen
         run: >
           pyinstaller --noconfirm --clean --noconsole --onefile --name JaronsOPMakro --icon build/icon.ico
-          --collect-all customtkinter --collect-submodules pynput $(python tools/pyi_args.py) main.py
+          --collect-all customtkinter --collect-all lupa --collect-submodules pynput $(python tools/pyi_args.py) main.py
 
       - name: Selbsttest der gebauten EXE (lädt alle Module, prüft Zertifikate)
         run: |
@@ -121,7 +121,7 @@ jobs:
       - run: python tools/make_icon.py
       - run: >
           pyinstaller --noconfirm --clean --onefile --name JaronsOPMakro-linux
-          --collect-all customtkinter --collect-submodules pynput $(python tools/pyi_args.py) main.py
+          --collect-all customtkinter --collect-all lupa --collect-submodules pynput $(python tools/pyi_args.py) main.py
       - uses: actions/upload-artifact@v4
         with: { name: JaronsOPMakro-linux, path: dist/JaronsOPMakro-linux }
 
