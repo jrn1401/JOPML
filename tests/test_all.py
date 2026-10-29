@@ -2568,8 +2568,11 @@ def test_lua_sandbox_real():
     try:
         import lupa  # noqa: F401
     except Exception:
+        check(not os.environ.get("GITHUB_ACTIONS"), "Im CI muss lupa installiert sein (release.yml: pip install ... lupa)")
         print("  (übersprungen: lupa nicht installiert)")
         return
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::notice title=Lua-Sandbox::Test mit echter Lua-Engine (lupa {getattr(lupa, '__version__', '?')}, {lupa.LuaRuntime().lua_implementation})")
     from modules.luascripts import runner
 
     class Macros:
