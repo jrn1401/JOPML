@@ -8,7 +8,7 @@ from core.version import APP_VERSION
 
 FORMAT = "jopml-backup"
 # Gerätespezifisches bleibt draußen (Pfade, Zustimmungen, Anmelde-Voreinstellung)
-EXCLUDE = {"bg_image", "icon_image", "first_run_done", "legal_version", "legal_hash", "legal_accepted_at", "remember", "recoil_ack",
+EXCLUDE = {"bg_image", "icon_image", "first_run_done", "legal_version", "legal_hash", "legal_accepted_at", "remember",
            "assistant_url", "contact_endpoint", "ui_scale"}
 EXTS = {".json", ".jopm"}
 MAX_FILES, MAX_BYTES = 300, 200_000

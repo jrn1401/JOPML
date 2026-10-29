@@ -48,7 +48,6 @@ def from_constants() -> set[str]:
     from core import assistant, credits, firstrun_view, identity, settings_view, theme
     from core import contact_view
     from modules.extensions import catalog
-    from modules.recoil import plugin as recoil
     from modules.macros import page as macro_page
     for keys, answer in assistant.FAQ:
         out.add(answer)
@@ -62,16 +61,11 @@ def from_constants() -> set[str]:
     out.update(role for _, role, _, _ in credits.CREDITS)
     for e in catalog.CATALOG:
         out.update((e["name"], e["desc"]))
-    out.add(recoil.WARNING)
     out.update(["Left mouse button", "Right mouse button", "Middle mouse button"])
     from modules.autoclicker import keys as ak
     out.update(ak.MOUSE_BUTTONS.values())
     from core.assistant_view import GREETING
     out.add(GREETING)
-    from modules.recoil.page import FIELDS
-    out.update(label for _, label, _ in FIELDS)
-    from modules.recoil.engine import PRESETS as RP
-    out.update(RP)
     from core import chatfilter, layout
     from modules.community import forum as c_forum, manage as c_manage, page as c_page, service as c_service
     out.update(c_service.ERROR_TEXTS.values())
@@ -132,7 +126,7 @@ def from_constants() -> set[str]:
     out.update(["New announcement", "New macro in the marketplace", "No pop-ups or sounds while a program is fullscreen (a summary follows afterwards)",
                 "Show community messages even when the Community page is closed or locked"])
     import importlib
-    for mod in ("autoclicker", "macros", "extensions", "recoil", "community", "clicktools", "gamemacros", "gamer", "productivity"):
+    for mod in ("autoclicker", "macros", "extensions", "community", "clicktools", "gamemacros", "gamer", "productivity"):
         p = importlib.import_module(f"modules.{mod}.plugin").Plugin
         out.update((p.name, p.description))
     # 1.7.0: Admin-Modul (Beschriftungen laufen über Variablen)

@@ -25,7 +25,6 @@ DEFAULT_SETTINGS = {
     "legal_version": "",           # Fassung der Bedingungen, der zugestimmt wurde
     "legal_hash": "",
     "legal_accepted_at": 0,
-    "recoil_ack": False,           # Warnhinweis im Recoil-Modul bestätigt
     "extensions": {},              # {id: {"enabled": bool, "config": {...}}}
     # --- v1.3 ---
     "nav_order": [],               # Reihenfolge der Module in der Seitenleiste (leer = Standard)

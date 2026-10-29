@@ -17,13 +17,8 @@ def _say(label, text, ok=True):
 
 class GameMacrosPage(HubPage):
     def __init__(self, parent, plugin):
-        tabs = [("General", lambda hub, plugin: self._recoil_page(), True)]
-        tabs += [(label, lambda area, plugin, c=cat: self._tab(area, c)) for cat, label in library.CATEGORIES.items()]
+        tabs = [(label, lambda area, plugin, c=cat: self._tab(area, c)) for cat, label in library.CATEGORIES.items()]
         super().__init__(parent, plugin, "Game macros", "Ready-made macros for your games. Pick a game, set a few values and press Start.", tabs)
-
-    def _recoil_page(self):
-        from modules.recoil.page import RecoilPage
-        return RecoilPage(self, self.app.plugin_by_id["recoil"], embedded=True)
 
     def _tab(self, area, category):
         ui.banner(area, "⚠  " + tr("Use macros only where the game allows it: single player, idle games or your own server. "

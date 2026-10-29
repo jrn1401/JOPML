@@ -34,8 +34,7 @@ Im Sinne dieser Bedingungen bezeichnet der Ausdruck
   a) das Modul „Jaron Op Makro“ (Auto-Clicker und Auto-Keyer),
   b) das Modul „Macros“ (Makro-Editor mit KI-Generator),
   c) das Modul „Browsing / Extensions“,
-  d) das Modul „Recoil“ (Rückstoß-Ausgleich),
-  e) alle künftig hinzugefügten Module;
+  d) alle künftig hinzugefügten Module;
  5. „Dienste Dritter“ sämtliche Leistungen, die nicht vom Bereitsteller selbst erbracht werden, insbesondere Hosting-, Datenbank- und Authentifizierungsdienste (Supabase), Quellcode- und Downloaddienste (GitHub), Anmeldedienste (Google) und KI-Dienste (Google AI Gemini);
  6. „Spielehersteller“ jeden Hersteller, Herausgeber, Betreiber oder Plattformbetreiber eines Computerspiels oder einer Online-Dienstleistung, mit dem oder mit dessen Software der Nutzer das Programm gemeinsam verwendet.
 
@@ -183,14 +182,12 @@ Abs. 9 – Verlust virtueller Güter
  3. Der Nutzer trägt das Risiko einer Sperre allein.
 
 Abs. 10 – Eigenverantwortung und Empfehlung
- 1. Dem Nutzer wird dringend empfohlen, das Programm und insbesondere das Modul „Recoil“ ausschließlich in Offline-Spielen, im Einzelspielermodus und in Test- oder Bildungsumgebungen zu verwenden.
+ 1. Dem Nutzer wird dringend empfohlen, das Programm ausschließlich in Offline-Spielen, im Einzelspielermodus und in Test- oder Bildungsumgebungen zu verwenden.
  2. Die Nutzung in kompetitiven Online-Spielen erfolgt auf eigenes, ausschließliches Risiko des Nutzers.
  3. Der Nutzer stellt den Bereitsteller, soweit zulässig, von Ansprüchen Dritter frei, die auf einer rechtswidrigen oder vertragswidrigen Nutzung des Programms durch den Nutzer beruhen.
 
-Abs. 11 – Besonderer Hinweis zum Modul „Recoil“
- 1. Das Modul erzeugt lediglich konfigurierbare Mausbewegungen, solange die linke Maustaste gehalten wird.
- 2. Es liest weder Spielspeicher noch Spieldateien aus und enthält keine spielspezifischen Daten.
- 3. Es kann von modernen Anti-Cheat-Systemen sehr leicht erkannt werden.
+Abs. 11 – Entfallen
+Das frühere Modul „Recoil“ ist nicht mehr Teil des Programms.
 
 Abs. 12 – Marken
 Die in diesem Paragrafen genannten Bezeichnungen sind Marken oder Bezeichnungen ihrer jeweiligen Inhaber. Es besteht keine Verbindung, Förderung oder Billigung zwischen dem Bereitsteller und diesen Inhabern.

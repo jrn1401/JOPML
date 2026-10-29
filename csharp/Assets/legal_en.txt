@@ -27,8 +27,8 @@ SECTION 3 - ACCOUNT BANS AND ANTI-CHEAT
 3.2 The program contains no function to hide, disguise or bypass detection. Non-detection is not promised.
 3.3 Those ToS/EULAs bind you, not the provider. The provider is not your vicarious agent (Sec. 278 BGB) and does not encourage any breach.
 3.4 Loss of game accounts, virtual goods, in-game currency, skins, ranks, tournament entries or prizes: no liability, no recourse, to the extent permitted by law. You bear the risk of a ban alone.
-3.5 Strongly recommended: use the program, and especially the "Recoil" module, only in offline games, single-player or test/education environments. You release the provider from third-party claims arising from your unlawful or contract-breaking use, to the extent permitted.
-3.6 The "Recoil" module only generates configurable mouse movement while the left button is held. It reads no game memory or files and can very easily be detected by modern anti-cheat systems.
+3.5 Strongly recommended: use the program only in offline games, single-player or test/education environments. You release the provider from third-party claims arising from your unlawful or contract-breaking use, to the extent permitted.
+3.6 (Removed: the former "Recoil" module is no longer part of the program.)
 3.7 Product names are trademarks of their owners; there is no affiliation or endorsement.
 
 SECTION 4 - PRIVACY

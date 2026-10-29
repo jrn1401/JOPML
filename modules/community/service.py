@@ -53,6 +53,8 @@ ERROR_TEXTS = {
     "invalid_target": "You cannot do this with yourself.",
     "invalid_email": "Please enter a valid email address.",
     "invalid_script": "This macro contains commands that are not allowed.",
+    "invalid_module": "This module cannot be shared: only text files, at most 40 files and 300 KB, with a plugin.py.",
+    "limit_modules": "You have reached the maximum number of shared modules.",
     "invalid_payload": "This value is not accepted.",
     "muted": "You are muted on this server for now.",
     "slowmode": "Slow mode is on: please wait a bit before your next message.",

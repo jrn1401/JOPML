@@ -1,6 +1,6 @@
 APP_NAME = "Jaron's OP Makro"      # Anzeigename (Fenstertitel, Seitenleiste)
 APP_ID = "JaronsOPMakro"           # Dateiname der EXE und Ordnername für Einstellungen (ohne Sonderzeichen)
-APP_VERSION = "1.7.2"
+APP_VERSION = "1.7.7"
 SHORT_NAME = "JOPML"               # Kürzel, das im App-Icon immer sichtbar bleibt
 
 # Hier liegt die version.json (GitHub-Release "latest")
@@ -36,4 +36,4 @@ ASSISTANT_URL = ""
 AD_UNIT_ID = ""                    # z. B. "ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy" (nur mobil, siehe Hinweis in ads.py)
 
 # Version der Nutzungsbedingungen. Wird sie erhöht, muss jeder Nutzer erneut zustimmen.
-LEGAL_VERSION = "2026-10-28b"
+LEGAL_VERSION = "2026-10-29e"

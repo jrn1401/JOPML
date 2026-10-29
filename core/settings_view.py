@@ -2,6 +2,7 @@
 Jeder Bereich wird erst beim Öffnen aufgebaut (spart Speicher und Startzeit)."""
 import datetime
 import json
+from pathlib import Path
 import threading
 import tkinter as tk
 import webbrowser
@@ -475,7 +476,7 @@ class SettingsView(ctk.CTkFrame):
         ui.muted(body, "Makes everything bigger or smaller. Only for this computer.").pack(fill="x", pady=(6, 0))
 
         body = self._card("Emergency stop")
-        ui.muted(body, "Stops the autoclicker, macros and recoil at once – from anywhere, even when the launcher is in the background.").pack(fill="x")
+        ui.muted(body, "Stops the autoclicker and macros at once – from anywhere, even when the launcher is in the background.").pack(fill="x")
         ctk.CTkLabel(body, text=tr("Shortcut") + ":  " + (self.app.settings.get("panic_hotkey") or ""), anchor="w",
                      font=ctk.CTkFont(family="Consolas", size=13)).pack(fill="x", pady=(6, 0))
         pk = self.app.panic_key
@@ -498,10 +499,122 @@ class SettingsView(ctk.CTkFrame):
         ctk.CTkButton(r, text=tr("Save backup …"), width=150, command=self._backup_save).pack(side="left")
         ctk.CTkButton(r, text=tr("Restore backup …"), width=150, command=self._backup_restore).pack(side="left", padx=8)
 
+        self._import_card()
+
         body = self._card("About")
         ctk.CTkLabel(body, text=f"{APP_NAME}  ·  {tr('Version')} {APP_VERSION}", anchor="w").pack(fill="x")
         ui.muted(body, "Data folder: {p}", p=str(config.app_dir())).pack(fill="x", pady=(2, 8))
         ctk.CTkButton(body, text=tr("Check for updates"), width=170, command=lambda: self.app.check_updates(manual=True)).pack(anchor="w")
+
+    # ---- Module aus Dateien importieren
+    def _import_card(self):
+        from core import module_import
+        body = self._card("Import modules")
+        ui.muted(body, "Add your own modules from a folder, a .zip file, a single .py file or by pasting code (a module needs a plugin.py with a class Plugin). "
+                       "A module is program code and runs with all rights of this program: import only modules from sources you trust. "
+                       "Imported modules are loaded at the next start and stay when the program is updated.").pack(fill="x", pady=(0, 6))
+        msg = self._msg(body)
+        listing = ctk.CTkFrame(body, fg_color="transparent")
+
+        def render():
+            for w in listing.winfo_children():
+                w.destroy()
+            for name in module_import.installed():
+                row = ctk.CTkFrame(listing, fg_color=theme.c("inset"), corner_radius=8)
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text=name, anchor="w").pack(side="left", padx=10, pady=6)
+                ctk.CTkButton(row, text=tr("Remove"), width=80, height=24, fg_color="gray35", hover_color="gray25",
+                              command=lambda n=name: remove(n)).pack(side="right", padx=6)
+
+        def remove(name):
+            if messagebox.askyesno(tr("Remove module"), tr("Remove the module {n}? It disappears at the next start.", n=name)):
+                module_import.remove_module(name)
+                self._say(msg, tr("Module removed. Restart the program to finish."))
+                render()
+
+        def run_import(name, action):
+            """Gemeinsamer Ablauf für Datei, Ordner und eingefügten Code: Namen prüfen, ggf. Ersetzen und die Warnung bestätigen lassen."""
+            builtin = module_import.builtin_names()
+            try:
+                module_import.check_name(name, builtin)
+                replace = False
+                if name in module_import.installed():
+                    if not messagebox.askyesno(tr("Import module"), tr("A module named {n} is already imported. Replace it?", n=name)):
+                        return False
+                    replace = True
+                if not messagebox.askokcancel(
+                        tr("Import module"),
+                        tr("The module {n} is program code. It runs with all rights of this program and can read, change and send your files and data. "
+                           "Import it only if you trust the source and understand the code.\n\nImport it?", n=name),
+                        icon="warning"):
+                    return False
+                action(replace, builtin)
+            except module_import.ImportErrorJOPML as exc:
+                self._say(msg, str(exc), False)
+                return False
+            except OSError as exc:
+                self._say(msg, f"{type(exc).__name__}: {exc}", False)
+                return False
+            self._say(msg, tr("Module {n} imported. Restart the program to use it.", n=name))
+            render()
+            return True
+
+        def do_import(path):
+            p = Path(path)
+            name = module_import.clean_name(p.name if p.is_dir() else p.stem)
+            run_import(name, lambda replace, builtin: module_import.import_module_files(p, name, replace=replace, builtin=builtin))
+
+        def code_dialog():
+            top = ctk.CTkToplevel(self, fg_color=theme.c("main"))
+            top.title(tr("Add a module from code"))
+            top.geometry("720x560")
+            top.transient(self.winfo_toplevel())
+            ui.muted(top, "Paste the code of a module (the content of its plugin.py). It needs a class named Plugin.").pack(fill="x", padx=16, pady=(14, 6))
+            nr = ctk.CTkFrame(top, fg_color="transparent")
+            nr.pack(fill="x", padx=16)
+            ctk.CTkLabel(nr, text=tr("Module name"), anchor="w").pack(side="left", padx=(0, 8))
+            name_e = ctk.CTkEntry(nr, width=220, placeholder_text="mein_modul")
+            name_e.pack(side="left")
+            box = ctk.CTkTextbox(top, font=ctk.CTkFont(family="Consolas", size=12), wrap="none")
+            box.pack(fill="both", expand=True, padx=16, pady=8)
+            err = ctk.CTkLabel(top, text="", anchor="w", wraplength=660, justify="left")
+            err.pack(fill="x", padx=16)
+
+            def example():
+                box.delete("1.0", "end")
+                box.insert("1.0", module_import.TEMPLATE)
+                if not name_e.get().strip():
+                    name_e.insert(0, "mein_modul")
+
+            def save():
+                name = name_e.get().strip()
+                code = box.get("1.0", "end")
+                self._say(msg, "")
+                if run_import(name, lambda replace, builtin: module_import.import_module_code(code, name, replace=replace, builtin=builtin)):
+                    top.destroy()
+                else:
+                    self._say(err, msg.cget("text"), False)
+            br = ctk.CTkFrame(top, fg_color="transparent")
+            br.pack(pady=10)
+            ctk.CTkButton(br, text=tr("Insert example"), width=150, fg_color=theme.c("hover"), text_color=theme.TEXT, command=example).pack(side="left", padx=6)
+            ctk.CTkButton(br, text=tr("Import"), width=150, command=save).pack(side="left", padx=6)
+
+        def pick_file():
+            path = filedialog.askopenfilename(filetypes=[(tr("Modules"), "*.zip *.py")])
+            if path:
+                do_import(path)
+
+        def pick_folder():
+            path = filedialog.askdirectory()
+            if path:
+                do_import(path)
+        r = ctk.CTkFrame(body, fg_color="transparent")
+        r.pack(fill="x", pady=(4, 2))
+        ctk.CTkButton(r, text=tr("Import file …"), width=150, command=pick_file).pack(side="left")
+        ctk.CTkButton(r, text=tr("Import folder …"), width=150, command=pick_folder).pack(side="left", padx=8)
+        ctk.CTkButton(r, text=tr("Add from code …"), width=150, command=code_dialog).pack(side="left")
+        listing.pack(fill="x", pady=(6, 0))
+        render()
 
     def _set_scale(self, label):
         try:

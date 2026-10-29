@@ -201,7 +201,7 @@ class CommunityPage(ctk.CTkFrame):
     def _main_view(self):
         box = self._fresh()
         box.grid_rowconfigure(1, weight=1)
-        tabs = [("Chats", "chat"), ("Forum", "forum"), ("Marketplace", "market"), ("News", "news")]
+        tabs = [("Chats", "chat"), ("Forum", "forum"), ("Marketplace", "market"), ("Modules", "modules"), ("Leaderboards", "boards"), ("News", "news")]
         if (self.svc.me or {}).get("is_admin"):
             tabs.append(("Moderation", "mod"))
         self._tabs = {tr(label): key for label, key in tabs}
@@ -223,6 +223,12 @@ class CommunityPage(ctk.CTkFrame):
             elif key == "market":
                 from .market_view import MarketView
                 self.views[key] = MarketView(self.body, self)
+            elif key == "modules":
+                from .modules_view import ModulesView
+                self.views[key] = ModulesView(self.body, self)
+            elif key == "boards":
+                from .boards_view import BoardsView
+                self.views[key] = BoardsView(self.body, self)
             elif key == "news":
                 from .news_view import NewsView
                 self.views[key] = NewsView(self.body, self)

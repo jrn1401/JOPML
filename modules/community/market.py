@@ -6,7 +6,7 @@ from modules.macros import dsl
 from .service import CommunityError
 
 MAX_SCRIPT = 20000
-KINDS = ("cps5", "reaction")
+KINDS = ("cps5", "reaction", "recoil_up", "recoil_right", "recoil_zigzag", "recoil_random")
 
 
 def analyze(script: str) -> list[str]:

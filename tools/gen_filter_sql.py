@@ -1,29 +1,49 @@
 """Erzeugt die Datenbank-Migration für den Server-Filter aus core/chatfilter(_words).py.
 
-Aufruf:  python tools/gen_filter_sql.py   -> schreibt supabase/migrations/20261028000100_jopml_filter.sql
+Aufruf:  python tools/gen_filter_sql.py   -> schreibt supabase/migrations/20261031000000_jopml_filter_world.sql
+(ersetzt Funktionen und Muster der älteren Filter-Migration; bei neuen Änderungen OUT auf einen neuen Zeitstempel setzen)
 Nach Änderungen an den Wortlisten neu ausführen und die Datei als NEUE Migration (neuer Zeitstempel) einspielen.
 """
 import sys
+import unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from core import chatfilter as F  # noqa: E402
 
-OUT = ROOT / "supabase" / "migrations" / "20261028000100_jopml_filter.sql"
+OUT = ROOT / "supabase" / "migrations" / "20261031000000_jopml_filter_world.sql"
 
 
 def lit(s: str) -> str:
     return "$q$" + s + "$q$"
 
 
-SEP = "[^a-z\\s㐀-䶿一-鿿]{0,2}"
+SEP = F.SEP
 
 
 def _comp(r: str) -> str:
     import re
     r = r.replace(SEP, "~S").replace("[^a-z]{1,2}", "~T").replace("(?<![a-z])", "~B").replace("(?![a-z])", "~A")
     return re.sub(r"\(\?:([a-z])\+\|\)", r"~\1", r)
+
+
+def strip_class() -> str:
+    """Zeichenklasse für Postgres: alle (BMP-)Zeichen, die skeleton() in Python verwirft (Mn, Me, Cf, Soft-Hyphen, Tatweel)."""
+    cps = [cp for cp in range(0x10000) if not 0xD800 <= cp <= 0xDFFF
+           and (unicodedata.category(chr(cp)) in ("Mn", "Me", "Cf") or cp in (0xAD, 0x640))]
+    out, start, prev = [], None, None
+    for cp in cps:
+        if start is None:
+            start = prev = cp
+        elif cp == prev + 1:
+            prev = cp
+        else:
+            out.append((start, prev))
+            start = prev = cp
+    out.append((start, prev))
+    esc = lambda c: "\\x%04x" % c
+    return "[" + "".join(esc(a) if a == b else esc(a) + "-" + esc(b) for a, b in out) + "]"
 
 
 def maps():
@@ -45,7 +65,7 @@ def entries():
         words, phrases = [], []
         for w in WL.S.get(cat, []):
             pass
-        sub = [x for x in subs_l if len(x) >= 2]
+        sub = [x for x in subs_l if len(x) >= F._min_len(x)]
         for w in WL.W.get(cat, []):
             if " " in w.strip():
                 phrases.append(" ".join(x for x in (F._letters(t) for t in w.split()) if x))
@@ -59,7 +79,7 @@ def entries():
             if not ph:
                 continue
             (words if " " not in ph else ph2).append(ph)
-        words = [x for x in words if len(x) >= 2]
+        words = [x for x in words if len(x) >= F._min_len(x)]
         for kind, lst in (("sub", sub), ("word", words), ("phrase", ph2)):
             if lst:
                 out.append((cat, kind, lst))
@@ -121,14 +141,15 @@ def main():
         "",
         "create or replace function public.jopml_c_skel(t text, symbols boolean) returns text",
         "language sql immutable set search_path = '' as $f$",
-        "  select regexp_replace(",
+        "  select regexp_replace(regexp_replace(",
         "    translate(translate(",
         "      lower(regexp_replace(regexp_replace(normalize(replace(left(coalesce(t, ''), %d), 'ß', 'ss'), NFKD),"
         % F.MAX_CHARS,
-        "        '[\\x0300-\\x036f\\x200b-\\x200f\\x2028-\\x202e\\x2060-\\x206f\\xfeff\\xad\\x180e\\x034f]', '', 'g'), '[\\s]', ' ', 'g')),",
+        "        " + lit(strip_class()) + ", '', 'g'), '[\\s]', ' ', 'g')),",
         f"      {lit(F.WILD_CHARS)}, repeat(chr({ord(F.WILD)}), {len(F.WILD_CHARS)})),",
         f"      {lit(frm)} || case when symbols then {lit(sf)} else '' end || {lit(drop)},",
         f"      {lit(to)} || case when symbols then {lit(st)} else '' end),",
+        "    " + lit("[^a-z 26" + F.WILD + F.CJK + "]") + ", " + lit(F.JUNK) + ", 'g'),",
         "    '(.)\\1{3,}', '\\1\\1\\1', 'g')",
         "$f$;",
         "",

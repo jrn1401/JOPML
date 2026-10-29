@@ -9,7 +9,7 @@ import hashlib
 LEGAL_DE = r"""
 NUTZUNGSBEDINGUNGEN, HAFTUNGSAUSSCHLUSS UND DATENSCHUTZHINWEISE
 für das Programm „Jaron's OP Makro Launcher“ (nachfolgend „JOPML“ oder „Programm“)
-Fassung vom 28.10.2026 · Programmversion 1.7.2
+Fassung vom 29.10.2026 · Programmversion 1.7.4
 
 ════════════════════════════════════════════════════════════════════════
 LESEHINWEIS, ZUSTIMMUNGSMECHANIK UND AUSLEGUNGSREGEL
@@ -43,7 +43,7 @@ Im Sinne dieser Bedingungen bezeichnet der Ausdruck
  4. „Module“ die im Programm enthaltenen Funktionsbereiche, insbesondere
   a) das Modul „Autoclicker“ (Auto-Clicker und Auto-Keyer samt Maus- und Tastatur-Werkzeugen, Hotkeys, Farb-Trigger, Zeitplaner und Programm-Profilen),
   b) das Modul „Crosshair“ (Fadenkreuz-Overlay),
-  c) das Modul „Game macros“ (Spiele-Makros) einschließlich der Funktion „Recoil“ (Rückstoß-Ausgleich),
+  c) das Modul „Game macros“ (Spiele-Makros),
   d) das Modul „My macros“ (Makro-Editor mit KI-Generator),
   e) das Modul „Productivity“ (Zwischenablage-Verlauf, Fenster-Manager, Erweiterungen, KI-Makro-Assistent),
   f) das Modul „Gamer & Stream“ (Timer, Overlays, Geschwindigkeitstests, Screenshot),
@@ -198,14 +198,12 @@ Abs. 9 – Verlust virtueller Güter
  3. Der Nutzer trägt das Risiko einer Sperre allein.
 
 Abs. 10 – Eigenverantwortung und Empfehlung
- 1. Dem Nutzer wird dringend empfohlen, das Programm und insbesondere die Funktion „Recoil“ ausschließlich in Offline-Spielen, im Einzelspielermodus und in Test- oder Bildungsumgebungen zu verwenden.
+ 1. Dem Nutzer wird dringend empfohlen, das Programm ausschließlich in Offline-Spielen, im Einzelspielermodus und in Test- oder Bildungsumgebungen zu verwenden.
  2. Die Nutzung in kompetitiven Online-Spielen erfolgt auf eigenes, ausschließliches Risiko des Nutzers.
  3. Der Nutzer stellt den Bereitsteller, soweit zulässig, von Ansprüchen Dritter frei, die auf einer rechtswidrigen oder vertragswidrigen Nutzung des Programms durch den Nutzer beruhen.
 
-Abs. 11 – Besonderer Hinweis zur Funktion „Recoil“
- 1. Die Funktion erzeugt lediglich konfigurierbare Mausbewegungen, solange die linke Maustaste gehalten wird.
- 2. Es liest weder Spielspeicher noch Spieldateien aus und enthält keine spielspezifischen Daten.
- 3. Es kann von modernen Anti-Cheat-Systemen sehr leicht erkannt werden.
+Abs. 11 – Entfallen
+Das frühere Modul „Recoil“ (Rückstoß-Ausgleich) ist nicht mehr Teil des Programms. Die Nummerierung bleibt unverändert.
 
 Abs. 12 – Marken
 Die in diesem Paragrafen genannten Bezeichnungen sind Marken oder Bezeichnungen ihrer jeweiligen Inhaber. Es besteht keine Verbindung, Förderung oder Billigung zwischen dem Bereitsteller und diesen Inhabern.
@@ -528,9 +526,9 @@ Abs. 1 – Autoclicker, Mausfunktionen, Zeitplaner
  2. Anti-AFK und Dauerklicken können gegen Regeln von Spielen, Plattformen oder Arbeitgebern verstoßen (z. B. Nutzungsbedingungen, Hausordnung, Arbeitsvertrag).
  3. Der Zeitplaner läuft nur, solange das Programm läuft.
 
-Abs. 2 – Spiele-Makros und Recoil
+Abs. 2 – Spiele-Makros
  1. Die Spiele-Makros (Minecraft, Idle-Spiele, Inventar, Chat) sind für Einzelspieler-, Idle- und eigene Server gedacht. Das Chat-Makro hat einen Spam-Schutz; er ist kein Freibrief.
- 2. Die Funktionen zur Rückstoß-Kompensation (Anti-Recoil) können von Anti-Cheat-Systemen sehr leicht erkannt werden. Die Nutzung ist nur in Offline-Spielen zu Bildungs- und Testzwecken ausdrücklich empfohlen; vor der Aktivierung ist eine Warnung zu bestätigen.
+ 2. Das Programm enthält keine Funktion zur Rückstoß-Kompensation; das frühere Modul „Recoil“ wurde entfernt.
  3. Das Programm enthält keine Funktion, Erkennung zu verbergen, und kein Werkzeug zur Kalibrierung gegen Spiele.
 
 Abs. 3 – Fadenkreuz-Overlay
@@ -551,6 +549,24 @@ Der Kartoffel-Modus und die Leistungsgrenzen schränken Funktionen und Aktualisi
 
 Abs. 7 – Anzeige von Adressen
 Eingegebene Positionen, Koordinaten und Zielfenster sind vom Nutzer zu prüfen; bei geänderter Bildschirmauflösung, Skalierung oder Fensteranordnung treffen Klicks andere Stellen. Der Fenster-Manager verschiebt fremde Fenster (bei mehreren Monitoren auch auf andere Monitore); Fenster können dabei teilweise außerhalb des sichtbaren Bereichs landen, wenn sich die Monitoranordnung nach dem Speichern eines Layouts geändert hat.
+
+Abs. 8 – Importierte Module
+ 1. Über „Einstellungen > System > Module importieren“ lassen sich eigene Module aus Dateien, Ordnern oder eingefügtem Code hinzufügen. Ein Modul ist Programmcode. Es läuft mit allen Rechten dieses Programms und des Betriebssystem-Kontos des Nutzers und kann damit Dateien und Daten lesen, ändern, löschen und versenden sowie Eingaben auslösen.
+ 2. Der Nutzer importiert nur Module aus Quellen, denen er vertraut, und prüft den Code, soweit er ihn versteht. Die Prüfungen des Programms (Dateitypen, Größe, Pfade, Namen) dienen nur der Vermeidung von Fehlbedienung und erkennen keinen schädlichen Code.
+ 3. Importierte Module stammen nicht vom Anbieter und werden von ihm weder geprüft noch unterstützt. Für Schäden durch importierte Module haftet der Anbieter nicht, soweit gesetzlich zulässig; die Grenzen von § 3 bleiben unberührt. Wer Module weitergibt, achtet auf Urheberrechte und Lizenzen und übernimmt die Verantwortung für den Inhalt.
+ 4. Importierte Module werden im Datenordner des Programms gespeichert, beim nächsten Start geladen, bleiben bei Programm-Updates erhalten und lassen sich in den Einstellungen wieder entfernen. Nach einem Update kann ein Modul nicht mehr funktionieren, wenn sich das Programm geändert hat; ein Anspruch auf Weiterbetrieb besteht nicht. Ein Modul kann ein eingebautes Modul nicht ersetzen. Funktionsstörungen, die durch ein importiertes Modul entstehen, begründen keinen Anspruch.
+
+Abs. 9 – Cheat-Menü
+ 1. Das Modul „Cheat-Menü“ führt Cheats für Einzelspieler-Modi aus: Chat-Befehle in Minecraft (Welt mit erlaubten Cheats) und die offiziellen Cheat-Codes von GTA 5 Enhanced im Story-Modus. Es liest keinen Spielspeicher, ändert keine Spieldateien und ist nicht für Online-Spiele, Mehrspieler-Server, Wettbewerbe oder Ranglisten gedacht.
+ 2. Die GTA-Codes werden wie von einer Tastatur eingegeben (Scan-Codes). Der Nutzer prüft selbst, dass das Spiel im Story-Modus läuft; in Online-Modi und auf fremden Servern können Cheats gegen Regeln verstoßen und zu Sperren führen. Cheats können Spielstände, Erfolge und Trophäen beeinflussen; der Nutzer sichert vorher seine Welten und Spielstände.
+ 3. Der Rückstoß-Trainer ist ein Übungsfeld im Programm: Er liest die Maus nur im eigenen Fenster und sendet keine Eingaben an Spiele. Er ist kein Werkzeug zum Ausgleich von Rückstoß in Spielen.
+ 4. Das Modul wurde automatisch getestet, aber nicht in den Spielen selbst; ein Anspruch auf Funktion nach Updates der Spiele besteht nicht (Grenzen von § 3 unberührt).
+
+Abs. 10 – Geteilte Module
+ 1. In der Community können Nutzer eigene Module (Python-Code) hochladen und anderen zum Installieren anbieten. Ein Modul läuft nach der Installation mit allen Rechten des Programms und des Kontos des Nutzers und kann Dateien und Daten lesen, ändern und senden.
+ 2. Module normaler Konten werden anderen erst angezeigt, nachdem ein Admin sie freigegeben hat. Die Freigabe ist eine Sichtkontrolle im Rahmen des Zumutbaren. Sie ist keine Sicherheitsprüfung und keine Zusicherung, dass ein Modul unschädlich, rechtmäßig oder funktionsfähig ist. Auffälligkeitslisten in der Oberfläche sind Lesehilfen ohne Gewähr.
+ 3. Wer ein Modul teilt, versichert, dass er es selbst geschrieben hat oder weitergeben darf, dass es keine Schadfunktion, keine Zugangsdaten, keine personenbezogenen Daten und keine Rechte Dritter verletzenden Inhalte enthält und dass es nicht gegen die Regeln von Spielen oder Plattformen verstoßen soll. Der Anbieter darf Module jederzeit ausblenden oder löschen und Konten sperren.
+ 4. Wer ein geteiltes Modul installiert, tut das auf eigenes Risiko, liest den Code vorher und installiert nur, was er versteht. Für Module von Nutzern haftet der Anbieter nicht, soweit gesetzlich zulässig; die Grenzen von § 3 bleiben unberührt. Schäden durch ein Modul macht der Nutzer gegenüber dem Autor geltend, nicht gegenüber dem Anbieter.
 
 ════════════════════════════════════════════════════════════════════════
 § 17 WICHTIGSTE PUNKTE AUF EINEN BLICK (KEINE ABSCHLIESSENDE ZUSAMMENFASSUNG)
@@ -594,7 +610,7 @@ Die Überschriften dienen der Übersicht und beeinflussen die Auslegung nicht. V
 
 LEGAL_EN = r"""
 TERMS OF USE, DISCLAIMER AND PRIVACY NOTICE
-for "Jaron's OP Makro Launcher" (JOPML) - version of 28 Oct 2026 - program version 1.7.2
+for "Jaron's OP Makro Launcher" (JOPML) - version of 29 Oct 2026 - program version 1.7.4
 (Orientation only. The German text is the authoritative version and is shown in full on request.)
 
 READING NOTE
@@ -621,8 +637,8 @@ SECTION 3 - ACCOUNT BANS AND ANTI-CHEAT
 3.2 The program contains no function to hide, disguise or bypass detection. Non-detection is not promised.
 3.3 Those ToS/EULAs bind you, not the provider. The provider is not your vicarious agent (Sec. 278 BGB) and does not encourage any breach.
 3.4 Loss of game accounts, virtual goods, in-game currency, skins, ranks, tournament entries or prizes: no liability, no recourse, to the extent permitted by law. You bear the risk of a ban alone.
-3.5 Strongly recommended: use the program, and especially the "Recoil" module, only in offline games, single-player or test/education environments. You release the provider from third-party claims arising from your unlawful or contract-breaking use, to the extent permitted.
-3.6 The "Recoil" module only generates configurable mouse movement while the left button is held. It reads no game memory or files and can very easily be detected by modern anti-cheat systems.
+3.5 Strongly recommended: use the program only in offline games, single-player or test/education environments. You release the provider from third-party claims arising from your unlawful or contract-breaking use, to the extent permitted.
+3.6 (Removed: the former "Recoil" module is no longer part of the program.)
 3.7 Product names are trademarks of their owners; there is no affiliation or endorsement.
 
 SECTION 4 - PRIVACY
@@ -688,9 +704,12 @@ SECTION 15 - AVAILABILITY, CHANGES, SHUTDOWN
 
 SECTION 16 - NOTES ON SPECIFIC FUNCTIONS
 16.1 Scheduler, colour trigger, program profiles and anti-AFK can fire input while you are away and can violate rules of games, platforms or employers. Overlays that were on when you quit come back on the next start; automatic win/loss counting compares screen colours, can be wrong and reads nothing from the game itself.
-16.2 Game macros are meant for single-player, idle and own servers; anti-recoil is easily detected - offline education/testing only. There is no function to hide detection and no tool for calibrating against games.
+16.2 Game macros are meant for single-player, idle and own servers; the program contains no recoil compensation. There is no function to hide detection and no tool for calibrating against games.
 16.3 Crosshair overlays and covering the game's crosshair may be forbidden in some games or competitions; the program reads no game memory and changes no game files. Overlays do not show over exclusive fullscreen. FPS/CPU/ping values are approximations. The streamer mode (Windows) cannot guarantee that nothing appears in a recording.
 16.4 Potato mode and resource limits reduce update rates and features; too low memory limits can crash the program. Check coordinates after changing resolution, scaling or window layout.
+16.5 Imported modules (Settings > System; from files, folders or pasted code, kept across updates but not guaranteed to keep working) are program code that runs with all rights of the program and of your account. Import only modules from sources you trust; the program's checks only prevent mistakes and do not detect harmful code. Imported modules are not from the provider, are not checked or supported by it, and the provider is not liable for them as far as the law allows (limits of section 3 unchanged).
+16.6 The Cheat menu runs cheats for single-player modes only: chat commands in Minecraft (worlds with cheats allowed) and the official GTA 5 Enhanced story-mode cheat codes, typed like a keyboard. It reads no game memory, changes no game files and is not for online games, multiplayer servers, competitions or ranked play, where cheats can break rules and lead to bans. Back up worlds and saves first; cheats can affect saves, achievements and trophies. The recoil trainer is a practice field that reads the mouse only inside its own window and sends no input to games. Tested automatically, not inside the games; no guarantee after game updates.
+16.7 Shared modules: users can upload their own modules (Python code) in the community. After installing, a module runs with all rights of the program and of your account and can read, change and send files and data. Modules of normal accounts are shown to others only after an admin approved them; this is a visual check within reason, not a security audit or a promise that a module is harmless, lawful or working. The lists of conspicuous places are reading aids without warranty. Whoever shares a module confirms that they wrote it or may pass it on and that it contains no harmful function, credentials, personal data or third-party rights violations. The provider may hide or delete modules and suspend accounts at any time. Installing a shared module is at your own risk: read the code first and install only what you understand. The provider is not liable for user modules as far as the law allows (limits of section 3 unchanged); claims for damage caused by a module are directed at its author.
 
 SECTION 17 - KEY POINTS AT A GLANCE (ORIENTATION ONLY)
 Free, anonymous, no warranty; liability only for intent and gross negligence where allowed, mandatory law unaffected. Automation can break game rules - bans are your risk. Test every macro, use the emergency stop, back up your data. Passwords cannot be changed or recovered; export and deletion are self-service. Community: 16+, messages encrypted, names/forum not. AI answers can be wrong; enter nothing confidential. Diagnostics are pseudonymous and can be switched off; the admin sees online counts, the account list with stored e-mail and error reports. Get the program only from the official source. German law applies; mandatory consumer protection stays. This text is an unreviewed draft, not legal advice.

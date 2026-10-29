@@ -118,3 +118,31 @@ PHRASES = {
 ALLOW = [
     "scunthorpe", "shiitake", "shitake", "snigger", "niggard", "cum laude", "pussycat", "pussy willow",
 ]
+
+
+# --- Weltweite Erweiterung (v1.7.5) ------------------------------------------
+from core import chatfilter_words_world as _world  # noqa: E402
+
+
+# Einträge der Weltliste, die als eigenes Wort zu viele harmlose Treffer ergeben würden (Namen, Alltagswörter in anderen Sprachen).
+_DROP = {"pau", "op", "jdi", "anak", "dasar", "kau", "ka", "lồn", "pois", "lan", "sa", "pidh", "vcl", "vkl", "clgt", "hach", "хач",
+         "huy", "hui", "eedok", "ee dok", "시발",
+         "你全家", "祝你全家", "死全家", "全家死光", "我会找到你", "du ma", "du me", "krijg de", "an der schule", "ich finde dich", "mort aux",
+         "de mierda", "de merda", "di merda", "je veux te", "montre moi ta", "karna hai", "bhen ke", "tu tu di", "hachi", "xaci", "pedes",
+         "mort aux pedes", "اليهود", "marokkanen", "lul", "jonna", "jirai", "kamina", "kamine", "pytka", "minet", "pajero", "pajeros", "nude"}
+
+
+def _merge(base, extra):
+    for cat in CATEGORIES:
+        seen = set(base[cat])
+        for w in extra.get(cat, []):
+            w = w.strip()
+            if w and w not in seen and w not in _DROP:
+                seen.add(w)
+                base[cat].append(w)
+
+
+_merge(W, _world.W)
+_merge(S, _world.S)
+_merge(PHRASES, _world.PHRASES)
+ALLOW += [a for a in _world.ALLOW if a not in ALLOW]

@@ -370,7 +370,7 @@ class LauncherApp(ctk.CTk):
                                     get_key=lambda: self.settings.get("panic_hotkey") or "", set_key=set_panic))
 
     def panic(self):
-        """Stoppt Autoclicker, Makros und Recoil sofort."""
+        """Stoppt Autoclicker und Makros sofort."""
         from core.panic import stop_everything
         done = stop_everything(self)
         self.update_idletasks()

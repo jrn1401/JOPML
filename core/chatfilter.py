@@ -33,7 +33,7 @@ LETTERS = {
     "ґ": "g", "ѕ": "s", "ј": "j", "һ": "h", "ԁ": "d",
     # griechisch
     "α": "a", "β": "b", "γ": "y", "ε": "e", "ζ": "z", "η": "n", "ι": "i", "κ": "k", "μ": "m", "ν": "u", "ο": "o", "π": "n",
-    "ρ": "p", "σ": "s", "ς": "s", "τ": "t", "υ": "u", "χ": "x", "ω": "w",
+    "ρ": "p", "σ": "s", "ς": "s", "τ": "t", "υ": "u", "χ": "x", "ω": "w", "δ": "d", "θ": "o", "λ": "i", "ξ": "e", "φ": "f", "ψ": "y",
     # lateinische Sonderzeichen ohne Zerlegung
     "ø": "o", "đ": "d", "ð": "d", "ł": "l", "ı": "i", "æ": "a", "œ": "o", "þ": "p",
     # Ziffern-Leetspeak
@@ -41,11 +41,20 @@ LETTERS = {
     # Verwechslungsklassen
     "l": "i", "v": "u",
 }
-CJK = "㐀-䶿一-鿿"
-SEP = r"[^a-z\s" + CJK + "]{0,2}"
-SEP_CJK = r"[^a-z0-9" + CJK + "]{0,2}"
+# Schriften, die Zeichen für Zeichen verglichen werden (ohne Wortgrenzen): Chinesisch, Japanisch (Kana), Koreanisch (als Jamo,
+# weil NFKD Silben zerlegt), Arabisch/Persisch/Urdu, Hebräisch, Hindi (Devanagari), Bengalisch.
+SCRIPT_RANGES = (("\u3400", "\u4dbf"), ("\u4e00", "\u9fff"), ("\u3040", "\u30ff"), ("\u1100", "\u11ff"), ("\u0600", "\u06ff"),
+                 ("\u0750", "\u077f"), ("\u0590", "\u05ff"), ("\u0900", "\u097f"), ("\u0980", "\u09ff"))
+CJK = "".join(f"{lo}-{hi}" for lo, hi in SCRIPT_RANGES)
+HAN = (("\u3400", "\u4dbf"), ("\u4e00", "\u9fff"))
+# Alles, was weder Buchstabe, Leerzeichen, Ziffer 2/6 noch Zeichen einer Schrift ohne Groß-/Kleinschreibung ist, wird in der Grundform
+# zu JUNK vereinheitlicht. So bleiben die Trennzeichen-Klassen der Muster winzig (Laden dauert Sekunden statt Minuten).
+JUNK = "¤"
+SEP = "[" + JUNK + WILD + "26]{0,2}"
+SEP_CJK = "[" + JUNK + WILD + " ]{0,2}"
 SEP_SPACED = r"[^a-z]{1,2}"
-SEP_WORDS = r"[^a-z" + CJK + "]{1,3}"
+SEP_WORDS = "[" + JUNK + WILD + " 26]{1,3}"
+_KEEP = re.compile("[a-z 26" + WILD + CJK + "]")
 BEFORE, AFTER = "(?<![a-z])", "(?![a-z])"
 MAX_CHARS = 6000
 
@@ -53,7 +62,8 @@ LABELS = {"profanity": "insults / profanity", "sexual": "sexual content", "hate"
 
 
 def _is_cjk(c: str) -> bool:
-    return "㐀" <= c <= "䶿" or "一" <= c <= "鿿"
+    """Zeichen einer Schrift ohne Groß-/Kleinschreibung und ohne Look-alikes (wird Zeichen für Zeichen verglichen)."""
+    return any(lo <= c <= hi for lo, hi in SCRIPT_RANGES)
 
 
 def skeleton(text: str, symbols: bool = True) -> tuple[str, list[int]]:
@@ -65,7 +75,7 @@ def skeleton(text: str, symbols: bool = True) -> tuple[str, list[int]]:
         low = "ss" if ch == "ß" else ch.lower()
         for c in unicodedata.normalize("NFKD", low):
             cat = unicodedata.category(c)
-            if cat in ("Mn", "Me", "Cf") or c == "­":
+            if cat in ("Mn", "Me", "Cf") or c == "­" or c == "ـ":
                 continue
             if c.isspace() or cat == "Cc":
                 c = " "
@@ -76,6 +86,8 @@ def skeleton(text: str, symbols: bool = True) -> tuple[str, list[int]]:
             elif symbols and c in SYMBOLS:
                 c = SYMBOLS[c]
             for d in c:
+                if not _KEEP.match(d):
+                    d = JUNK
                 if d == run_char:
                     run_len += 1
                     if run_len > 3:          # fuuuuuuck -> fuuuck (hält die Mustersuche schnell)
@@ -99,9 +111,14 @@ def _unit(c: str, wild: bool = True) -> str:
     return f"(?:{c}+|{WILD})" if wild else f"{c}+"
 
 
+def _min_len(sk: str) -> int:
+    """Chinesisch: 2 Zeichen genügen. Andere Schriften ohne Wortgrenzen brauchen mehr, sonst gibt es Fehltreffer in harmlosen Wörtern."""
+    return 2 if all(any(lo <= c <= hi for lo, hi in HAN) or not _is_cjk(c) for c in sk) else 3
+
+
 def _word_regex(word: str, whole: bool) -> list[str]:
     sk = _letters(word)
-    if len(sk) < 2:
+    if len(sk) < _min_len(sk):
         return []
     if any(_is_cjk(c) for c in sk):
         return [SEP_CJK.join(_unit(c) for c in sk)]

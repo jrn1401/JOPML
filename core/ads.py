@@ -6,8 +6,8 @@ Wichtig (siehe Fazit): Google AdMob ist für Mobile-Apps (Android/iOS) gedacht. 
 kein offizielles AdMob/Google-Ads-SDK. Für Windows/Linux wären Alternativen nötig (z. B. ein Werbebanner in einer
 eingebetteten Webansicht, ein anderes Netzwerk oder eigene Banner). Dieses Modul kapselt deshalb alles hinter
 dem Interface `AdProvider`, damit später ein echter Anbieter eingesetzt werden kann.
-Außerdem: Google-Werberichtlinien untersagen Werbung in Software, die Cheating unterstützt. Das Recoil-Modul
-kann die Freigabe verhindern. Vor dem Aktivieren Richtlinien und Datenschutz (Einwilligung, Art. 6/7 DSGVO) prüfen.
+Außerdem: Google-Werberichtlinien untersagen Werbung in Software, die Cheating unterstützt. Spiele-Makros
+können die Freigabe erschweren. Vor dem Aktivieren Richtlinien und Datenschutz (Einwilligung, Art. 6/7 DSGVO) prüfen.
 """
 from dataclasses import dataclass
 

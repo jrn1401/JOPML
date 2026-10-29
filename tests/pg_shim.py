@@ -20,7 +20,8 @@ MIGRATIONS = [
     "20261028000100_jopml_filter.sql", "20261028000200_jopml_community.sql", "20261028000300_jopml_name_filter.sql",
     "20261028201220_jopml_admin_overview.sql",
     "20261029000000_jopml_modtools.sql", "20261030000000_jopml_market.sql", "20261030000100_jopml_email_invite.sql",
-    "20261031000000_jopml_market_downup.sql",
+    "20261031000000_jopml_filter_world.sql", "20261031000100_jopml_module_share.sql",
+    "20261031000200_jopml_recoil_scores.sql", "20261031000300_jopml_market_downup.sql",
 ]
 
 

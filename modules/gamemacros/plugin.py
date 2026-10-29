@@ -1,4 +1,4 @@
-"""Modul "Game macros": fertige Makros für Spiele (Minecraft, Idle-Spiele, Inventar, Chat) und Anti-Recoil.
+"""Modul "Game macros": fertige Makros für Spiele (Minecraft, Idle-Spiele, Inventar, Chat).
 
 Die Makros laufen über das Modul "My macros" (gleicher Ausführer, F7 und Notaus gelten auch hier).
 Jedes Makro kann einen eigenen Start-Hotkey (ohne Stopp-Taste schaltet er um) und optional einen eigenen Stopp-Hotkey haben;
@@ -18,7 +18,7 @@ class Plugin(BasePlugin):
     icon = "🎮"
     version = "1.1.0"
     order = 30
-    description = "Ready-made macros for games (Minecraft, idle games, inventory, chat) and anti-recoil."
+    description = "Ready-made macros for games (Minecraft, idle games, inventory, chat)."
 
     def on_load(self):
         from . import library

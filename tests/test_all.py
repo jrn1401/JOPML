@@ -310,39 +310,6 @@ def test_dsl():
     check(dsl.extract_script("Hier:\n```text\nclick\n```\nFertig") == "click", "codezaun")
 
 
-# ---------------------------------------------------------------- Recoil
-def test_recoil():
-    from modules.recoil import engine
-    cfg = engine.RecoilConfig.from_dict({"y": 999, "interval_ms": 1, "x": "abc"})
-    check(cfg.y == 20 and cfg.interval_ms == 4 and cfg.x == 0.0, f"clamp {cfg}")
-    c = engine.RecoilConfig(y=2.0, ramp_pct=50, ramp_ms=1000, delay_ms=100)
-    check(engine.step(c, 50) == (0.0, 0.0), "delay")
-    check(abs(engine.step(c, 1100)[1] - 3.0) < 1e-9, "ramp voll")
-    comp = engine.Compensator()
-    total = sum(comp.feed(0, 1.4)[1] for _ in range(10))
-    check(total == 14, f"Bruchteile summieren sich: {total}")
-
-    class B:
-        def __init__(self): self.moves = []
-        def move_relative(self, dx, dy): self.moves.append((dx, dy))
-    b = B()
-    eng = engine.RecoilEngine(b, engine.RecoilConfig(y=3, interval_ms=5, ramp_pct=0))
-    eng.start()
-    eng.set_pressed(True)
-    time.sleep(0.15)
-    check(not b.moves, "ohne enabled keine Bewegung")
-    eng.enabled = True
-    time.sleep(0.2)
-    n = len(b.moves)
-    check(n > 3 and all(m == (0, 3) for m in b.moves), f"bewegt {n}")
-    eng.set_pressed(False)
-    time.sleep(0.1)
-    n2 = len(b.moves)
-    time.sleep(0.15)
-    check(len(b.moves) == n2, "Taste losgelassen -> Ruhe")
-    eng.shutdown()
-
-
 # ---------------------------------------------------------------- Extensions
 def test_extensions():
     from modules.extensions import catalog
@@ -518,10 +485,6 @@ def test_i18n_coverage():
     check(i18n.tr("Unbekannter Text {x}", x=1) == "Unbekannter Text 1", "Fallback")
     i18n.set_language("xx")
     check(i18n.get_language() == "en", "unbekannte Sprache -> Englisch")
-    from modules.recoil.plugin import WARNING
-    i18n.set_language("de")
-    check(i18n.tr(WARNING) == "ACHTUNG: Dieses Tool kann sehr leicht von modernen Anti-Cheat-Systemen erkannt werden. "
-                              "Die Nutzung wird ausdrücklich nur in Offline-Spielen zu Bildungs- und Testzwecken empfohlen!", "exakte Warnung")
     i18n.set_language("en")
 
 
@@ -603,14 +566,20 @@ FILTER_BAD = ["fuck you", "f u c k", "f.u.c.k", "fuuuuuuuuuuck", "f*ck", "sh1t",
               "сука", "cyka", "blyat", "傻 逼", "他妈的", "f​u​c​k", "b***h", "b!tch", "a$$hole", "you are a ass",
               "what the f_u_c_k", "pu55y", "НИГГЕР", "fvck", "Heil Hitler", "h e i l h i t l e r", "Sieg  Heil!", "go kill yourself now",
               "i will kill you", "ich bring dich um", "Hurensohn", "du hurensohn!!", "KYS", "puta madre", "hijo de puta",
-              "va te faire enculer", "ты сука", "пошёл нахуй", "Ты Сука!"]
+              "va te faire enculer", "ты сука", "пошёл нахуй", "Ты Сука!",
+              # v1.7.5 weltweit + Schreibvarianten
+              "f-u-c-k", "f..u..c..k", "s.c.h.e.i.s.s.e", "s_c_h_e_i_ß_e", "h*u*r*e*n*s*o*h*n", "h-u-r-e-n-s-o-h-n", "p.u.t.a",
+              "pu-ta madre", "cabr0n", "блядь", "б л я д ь", "ебать", "傻逼", "操你妈", "씨발", "كس امك", "madarchod", "c.h.u.t.i.y.a",
+              "orospu çocuğu", "kurwa", "k.u.r.w.a", "pizdec", "merde", "enculé", "stronzo", "vaffanculo", "cazzo", "filho da puta",
+              "n.i.g.g.a", "n!gg@", "курва", "мудак", "гандон", "jebem ti mater", "skurwysyn", "malaka", "tangina", "ngentot", "k0nt0l"]
 FILTER_GOOD = ["Hello world", "class", "assassin", "Scunthorpe", "shiitake mushrooms", "The hit of the season", "he has hit the ball",
                "passing grade", "I use Mongo", "Maine Coon cat", "assistant", "analysis of data", "cocktail", "peacock", "fuchsia",
                "Dickens", "classic", "Let's play Minecraft tonight", "gg wp", "kill all processes", "macro for diablo", "ok, 5 minutes",
                "I'm at 88 damage", "Hello (world)", "mail a@b.com", "x*y=5", "2*3=6", "5 * 5", "Hancock", "Essex", "title", "It's a hit",
                "das ist toll", "Guten Morgen, wie geht's?", "hola, cómo estás", "привет, как дела", "你好，今天天气很好",
                "magna cum laude", "pussycat", "please pass the glass", "this is as simple as that", "bass guitar", "I will see you",
-               "Can you help me?", "skill issue", "Der Fuchs läuft", "Apfelkuchen", "shitake", "plan a b c d",
+               "Can you help me?", "skill issue", "Kokosnuss", "Mutter", "Tokyo is nice", "arsenal", "Pakistan", "Japan", "Dubai", "pasta",
+               "これは普通の文です", "오늘 날씨가 좋네요", "مرحبا كيف حالك", "नमस्ते आप कैसे हैं", "שלום מה שלומך", "Puerto Rico", "Basel", "Der Fuchs läuft", "Apfelkuchen", "shitake", "plan a b c d",
                "What a nice day, isn't it", "Wie geht es dir? Alles klar bei dir?", "mi casa es tu casa", "bonjour, ça va?",
                "спасибо большое", "Meet at 5 pm, see you"]
 
@@ -849,6 +818,68 @@ def test_community_pg():
         check(len(analyze("repeat forever\n click left 1 1\n wait 10ms\nend")) == 1 and analyze(good) == [] and
               analyze('type "hallo"')[0].startswith("Types text"), "Analyse")
         check(check_for_publish("Titel ok", "", good) == "", "Vorab-Prüfung")
+
+        # ---- 1.7.7: Bestenlisten Rückstoß-Trainer
+        check(MA.submit_score("recoil_up", 71) == 71, "Rückstoß-Punkte gespeichert")
+        MB.submit_score("recoil_up", 88)
+        MG.submit_score("recoil_zigzag", 40)
+        pg_shim.sql(db, "update public.jopml_scores set updated_at = now() - interval '1 minute'")
+        check(MA.submit_score("recoil_up", 60) == 71, "schlechtere Punkte ändern den Bestwert nicht")
+        pg_shim.sql(db, "update public.jopml_scores set updated_at = now() - interval '1 minute'")
+        check(MA.submit_score("recoil_up", 95) == 95, "bessere Punkte ersetzen den Bestwert (höher ist besser)")
+        top = MA.top("recoil_up")
+        check([r["handle"] for r in top] == ["alice", "bob"] and top[0]["value"] == 95 and top[0]["mine"], f"Rückstoß-Bestenliste: {top}")
+        check([r["handle"] for r in MA.top("recoil_zigzag")] == ["gina"] and MA.top("recoil_random") == [], "Listen je Muster getrennt")
+        for bad in (0, 101, -5):
+            check(err(MA.submit_score, "recoil_random", bad), f"unmöglicher Wert {bad}")
+        check(err(MA.submit_score, "recoil_xyz", 50) and err(MA.top, "recoil_xyz"), "unbekannte Liste abgelehnt")
+
+        # ---- 1.7.7: Module teilen (mit Freigabe durch einen Admin)
+        from modules.community.modshare import ModShareService
+        SA, SB, SC, SG = ModShareService(A), ModShareService(B), ModShareService(C), ModShareService(G)
+        mfiles = {"plugin.py": "from core.plugin_api import BasePlugin\n\n\nclass Plugin(BasePlugin):\n    id = 'hallo'\n    name = 'Hallo'\n", "daten.json": "{}"}
+        r1 = SA.publish("hallo", "Hallo-Modul", "zeigt Hallo", mfiles, "1.0.0")
+        check(r1["status"] == "pending", f"Modul normaler Konten wartet auf Freigabe: {r1}")
+        check(not SB.browse() and any(m["mine"] and m["status"] == "pending" for m in SA.browse()), "Wartende Module sieht nur der Autor")
+        check("allowed" in err(SB.get, r1["id"]) or "Not found" in err(SB.get, r1["id"]), "Fremde können ein wartendes Modul nicht laden")
+        check("allowed" in err(SB.pending), "nur Admins sehen die Warteschlange")
+        check("allowed" in err(SB.review, r1["id"], True), "nur Admins geben frei")
+        q = SG.pending()
+        check(len(q) == 1 and q[0]["author"] == "alice" and "files" not in q[0], f"Warteschlange: {q}")
+        check(SG.get(r1["id"])["files"]["plugin.py"].startswith("from core"), "Admin kann den Code prüfen")
+        SG.review(r1["id"], False, "bitte erst testen")
+        check(not SB.browse() and [m["status"] for m in SA.browse()] == ["rejected"] and SA.browse()[0]["note"] == "bitte erst testen", "Abgelehnt: Autor sieht Hinweis")
+        r2 = SA.publish("hallo2", "Hallo-Modul 2", "", mfiles)
+        SG.review(r2["id"], True)
+        lst = SB.browse()
+        check(len(lst) == 1 and lst[0]["name"] == "hallo2" and "files" not in lst[0], f"Freigegebene Module sind sichtbar: {lst}")
+        got = SB.get(r2["id"])
+        check(got["files"] == mfiles and got["name"] == "hallo2", "Download liefert alle Dateien")
+        check(SB.browse()[0]["downloads"] == 1 and SA.get(r2["id"]) and SB.browse()[0]["downloads"] == 1, "Downloads zählen, eigene nicht")
+        check(SB.browse(q="hallo") and not SB.browse(q="gibtsnicht"), "Modul-Suche")
+        for bad_name, bad_files in (("Hallo!", mfiles), ("ok_name", {"daten.json": "{}"}), ("ok_name", {"plugin.py": "x", "ev.exe": "x"}),
+                                     ("ok_name", {"plugin.py": "x", "../x.py": "x"}), ("ok_name", {"plugin.py": "x" * 400000})):
+            check(err(SA.publish, bad_name, "Titel ok", "", bad_files), f"Client lehnt ab: {bad_name} {list(bad_files)}")
+        srv_bad = err(SA._rpc, "jopml_mod_publish", {"name": "serverbad", "title": "Server-Test", "descr": "", "files": {"plugin.py": "x", "evil.exe": "x"}})
+        check("cannot be shared" in srv_bad or "not valid" in srv_bad.lower() or "invalid" in srv_bad.lower(), f"Server lehnt ungültige Dateien ab: {srv_bad}")
+        srv_path = err(SA._rpc, "jopml_mod_publish", {"name": "serverbad", "title": "Server-Test", "descr": "", "files": {"plugin.py": "x", "a/../../b.py": "x"}})
+        check("cannot be shared" in srv_path, f"Server lehnt Pfad-Tricks ab: {srv_path}")
+        check("not allowed" in err(SA.publish, "hallo3", "Scheiße Modul", "", mfiles), "Titel gefiltert")
+        SA.publish("hallo3", "Drittes Modul", "", mfiles)
+        check("fast" in err(SA.publish, "hallo4", "Viertes Modul", "", mfiles), "höchstens 3 Module pro Tag")
+        check("allowed" in err(SC.delete, r2["id"]), "Fremde dürfen nicht löschen")
+        SB.report(r2["id"], "spam")
+        check(SC.browse() != [] and SC.browse()[0]["name"] == "hallo2", "eine Meldung blendet noch nicht aus")
+        SC.report(r2["id"], "gefährlich")
+        check(not SC.browse(), "ab zwei Meldungen ausgeblendet")
+        check(any(m["id"] == r2["id"] for m in SG.pending()), "gemeldete Module landen in der Warteschlange")
+        SG.review(r2["id"], True)
+        check(SC.browse() and SC.browse()[0]["name"] == "hallo2", "Admin kann wieder freigeben")
+        ra = SG.publish("admin_mod", "Admin-Modul", "", mfiles)
+        check(ra["status"] == "approved" and len(SB.browse()) == 2, "Admin-Module sind sofort sichtbar")
+        SG.delete(ra["id"])
+        SA.delete(r2["id"])
+        check(len(pg_shim.sql(db, "select id from public.jopml_mod_shares").split()) == 2, "Löschen durch Autor und Admin")
 
         check(err(C.fetch, sid, ch), "Fremde dürfen nicht lesen")
         check("forbidden" in err(C._rpc, "jopml_c_send", {"channel_id": ch, "epoch": 1, "body": "x", "sig": "y"}).lower()
@@ -1237,10 +1268,9 @@ def test_v133_tools():
         pages = {}
     a = App()
     a.plugins = [P("autoclicker", engine=Eng(), stop=lambda: calls.append("ac")),
-                 P("macros", state="running", stop=lambda: calls.append("mc")),
-                 P("recoil", enabled=True, set_enabled=lambda v: calls.append("rc"))]
+                 P("macros", state="running", stop=lambda: calls.append("mc"))]
     res = panic.stop_everything(a)
-    check(sorted(res) == ["autoclicker", "macros", "recoil"] and sorted(calls) == ["ac", "mc", "rc"], f"Notaus stoppt alle drei: {res}")
+    check(sorted(res) == ["autoclicker", "macros"] and sorted(calls) == ["ac", "mc"], f"Notaus stoppt beide: {res}")
 
     # Chat-Hilfen
     check(mentions("hi @Bob!", "bob") and not mentions("mail@bob.de", "bob") and not mentions("@bobby", "bob") and not mentions("x", ""), "Erwähnungen")
@@ -1617,7 +1647,7 @@ def test_notify():
 def test_gui_smoke():
     from core import app as app_mod, config
     s = config.load_settings()
-    s.update({"first_run_done": True, "legal_version": "2026-10-28b"})
+    s.update({"first_run_done": True, "legal_version": "2026-10-29b"})
     config.save_settings(s)
     for lang in ("en", "de", "zh"):
         s["language"] = lang
@@ -1642,7 +1672,7 @@ def test_gui_smoke():
         a.apply_look({"potato_mode": False})
         a._soft_rebuild()
         check(a.pages == pages_before, "Kartoffel-Modus schalten lässt die Seiten stehen")
-        for pid in ["dashboard", "autoclicker", "clicktools", "gamemacros", "macros", "productivity", "gamer", "assistant", "contact", "settings"]:
+        for pid in ["dashboard", "autoclicker", "clicktools", "gamemacros", "macros", "productivity", "gamer", "cheatmenu", "assistant", "contact", "settings"]:
             a.show(pid)
         for pid in ("autoclicker", "clicktools", "gamemacros", "gamer", "productivity"):        # alle Reiter einmal bauen
             page = a.pages[pid]
@@ -1662,7 +1692,7 @@ def test_gui_smoke():
             a.show("settings")
         a.apply_look({"accent": "#abcdef"})
         order = [i for i, _ in a.nav_entries()]
-        check(order[:7] == ["autoclicker", "clicktools", "gamemacros", "macros", "productivity", "gamer", "community"], f"Standard-Menüreihenfolge: {order}")
+        check(order[:8] == ["autoclicker", "clicktools", "gamemacros", "macros", "productivity", "gamer", "cheatmenu", "community"], f"Standard-Menüreihenfolge: {order}")
         check("extensions" not in order and "recoil" not in order, "Extensions und Recoil haben keinen eigenen Menüpunkt mehr")
         a.set_layout(order=["macros", "autoclicker"], hidden=["gamer"])
         check(a.nav_entries()[0][0] == "macros" and "gamer" not in dict(a.nav_entries()), "Layout wirkt")
@@ -1675,7 +1705,7 @@ def test_gui_smoke():
     check(a.root_frame is not None, "gate")
 
 
-def test_v151_recoil_overlay_notify():
+def test_v151_overlay_notify():
     from core import notify
     from modules.gamer.overlaystyle import OverlayStyle
     # Overlay-Stil
@@ -2212,6 +2242,234 @@ def test_v172_auto_outcome_overlays_monitors_hover():
     tint = theme.hover_tint()
     check(len(tint) == 2 and all(theme.is_hex(x) for x in tint), "Hover-Farbe ist gültig")
     check(theme.mix("#000000", "#ffffff", 0.5) == "#808080", "Farbmischung")
+
+
+def test_v173_module_import():
+    import tempfile
+    import zipfile
+    from pathlib import Path
+    from core import config
+    from core import module_import as mi
+    from core import plugin_manager
+
+    builtin = {"autoclicker", "gamer", "recoil"}
+    good = "from core.plugin_api import BasePlugin\n\n\nclass Plugin(BasePlugin):\n    id = 'hello'\n    name = 'Hello'\n"
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        root = d / "user"
+        # einzelne .py
+        (d / "mein_modul.py").write_text(good, encoding="utf-8")
+        check(mi.import_module_files(d / "mein_modul.py", root=root, builtin=builtin) == "mein_modul", "Name aus Dateiname")
+        check((root / "mein_modul" / "plugin.py").is_file() and (root / "mein_modul" / "__init__.py").is_file(), "Ordner angelegt")
+        raises(mi.ImportErrorJOPML, mi.import_module_files, d / "mein_modul.py", None, False, root, builtin)      # gibt es schon
+        check(mi.import_module_files(d / "mein_modul.py", replace=True, root=root, builtin=builtin) == "mein_modul", "Ersetzen")
+        # ZIP mit Ordner darum
+        zp = d / "pack.zip"
+        with zipfile.ZipFile(zp, "w") as z:
+            z.writestr("pack/plugin.py", good)
+            z.writestr("pack/data.json", "{}")
+        check(mi.import_module_files(zp, root=root, builtin=builtin) == "pack" and (root / "pack" / "data.json").is_file(), "ZIP mit Ordner")
+        # ZIP direkt mit plugin.py
+        zp2 = d / "flat.zip"
+        with zipfile.ZipFile(zp2, "w") as z:
+            z.writestr("plugin.py", good)
+        check(mi.import_module_files(zp2, root=root, builtin=builtin) == "flat", "ZIP flach")
+        # Ordner
+        (d / "ordner_x").mkdir()
+        (d / "ordner_x" / "plugin.py").write_text(good, encoding="utf-8")
+        check(mi.import_module_files(d / "ordner_x", root=root, builtin=builtin) == "ordner_x", "Ordner")
+        check(mi.installed(root) == ["flat", "mein_modul", "ordner_x", "pack"], f"Liste {mi.installed(root)}")
+        # Ablehnungen
+        bad = d / "evil.zip"
+        with zipfile.ZipFile(bad, "w") as z:
+            z.writestr("../evil/plugin.py", good)
+        raises(mi.ImportErrorJOPML, mi.import_module_files, bad, None, False, root, builtin)
+        with zipfile.ZipFile(d / "exe.zip", "w") as z:
+            z.writestr("plugin.py", good)
+            z.writestr("tool.exe", "MZ")
+        raises(mi.ImportErrorJOPML, mi.import_module_files, d / "exe.zip", None, False, root, builtin)
+        with zipfile.ZipFile(d / "noplugin.zip", "w") as z:
+            z.writestr("readme.txt", "x")
+        raises(mi.ImportErrorJOPML, mi.import_module_files, d / "noplugin.zip", None, False, root, builtin)
+        (d / "kaputt.py").write_text("class Plugin(:\n", encoding="utf-8")
+        raises(mi.ImportErrorJOPML, mi.import_module_files, d / "kaputt.py", None, False, root, builtin)
+        (d / "ohneklasse.py").write_text("x = 1\n", encoding="utf-8")
+        raises(mi.ImportErrorJOPML, mi.import_module_files, d / "ohneklasse.py", None, False, root, builtin)
+        (d / "gamer.py").write_text(good, encoding="utf-8")
+        raises(mi.ImportErrorJOPML, mi.import_module_files, d / "gamer.py", None, False, root, builtin)     # eingebaut
+        raises(mi.ImportErrorJOPML, mi.import_module_files, d / "nicht_da.py", None, False, root, builtin)
+        raises(mi.ImportErrorJOPML, mi.import_module_files, d / "mein_modul.py", "Gross Name", False, root, builtin)
+        check(not [p for p in root.iterdir() if p.name.startswith("jopml-mod-")], "keine halben Reste")
+        check(mi.clean_name("Mein Modul-1.zip") == "mein_modul_1" and mi.clean_name("3d tool").startswith("m_3d"), "Namen bereinigen")
+        # Entfernen
+        check(mi.remove_module("pack", root) and "pack" not in mi.installed(root) and not mi.remove_module("../x", root), "Entfernen")
+
+    # Code einfügen
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / "user"
+        code = "from core.plugin_api import BasePlugin\r\n\r\n\r\nclass Plugin(BasePlugin):\r\n    id = 'aus_code'\r\n"
+        check(mi.import_module_code(code, "aus_code", root=root, builtin=builtin) == "aus_code" and "\r" not in (root / "aus_code" / "plugin.py").read_text(), "Modul aus Code")
+        raises(mi.ImportErrorJOPML, mi.import_module_code, "", "leer", False, root, builtin)
+        raises(mi.ImportErrorJOPML, mi.import_module_code, "x = 1", "ohne_klasse", False, root, builtin)
+        raises(mi.ImportErrorJOPML, mi.import_module_code, code, "gamer", False, root, builtin)
+        raises(mi.ImportErrorJOPML, mi.import_module_code, code, "aus_code", False, root, builtin)           # schon da
+        raises(mi.ImportErrorJOPML, mi.import_module_code, "#" * (3 * 1024 * 1024), "riesig", False, root, builtin)
+        check(mi.import_module_code(code, "aus_code", replace=True, root=root, builtin=builtin) == "aus_code", "Ersetzen per Code")
+        import ast
+        ast.parse(mi.TEMPLATE)
+        check("class Plugin" in mi.TEMPLATE, "Vorlage ist gültiger Code")
+
+    # Module bleiben bei Updates: sie liegen im Datenordner, nie im Programmordner, den ein Update überschreibt
+    from core import updater
+    check(updater.APP_ROOT.resolve() not in mi.user_dir().resolve().parents and mi.user_dir().resolve().parent == config.app_dir().resolve(),
+          "user_modules liegt im Datenordner, außerhalb des Programmordners")
+
+    # Laden über den Modul-Manager: importiertes Modul erscheint, Namensdubletten werden abgelehnt
+    with tempfile.TemporaryDirectory() as d:
+        old = config.app_dir
+        config.app_dir = lambda: Path(d)
+        try:
+            u = Path(d) / "user_modules"
+            for name, pid in (("hallo", "hallo"), ("dublette", "gamer")):
+                (u / name).mkdir(parents=True)
+                (u / name / "__init__.py").write_text("", encoding="utf-8")
+                (u / name / "plugin.py").write_text(
+                    "from core.plugin_api import BasePlugin\n\n\nclass Plugin(BasePlugin):\n    id = %r\n    name = 'X'\n" % pid, encoding="utf-8")
+            plugins, failed = plugin_manager.discover(object())
+            ids = [p.id for p in plugins]
+            check("hallo" in ids and ids.count("gamer") == 1, f"Importiertes Modul geladen, Dublette abgelehnt: {ids}")
+            check(any(n == "dublette" for n, _ in failed), "Dublette steht in der Fehlerliste")
+            check(getattr(next(p for p in plugins if p.id == "hallo"), "user_module", False), "als importiert markiert")
+        finally:
+            config.app_dir = old
+            sys.modules.pop("jopml_user", None)
+            for k in [k for k in sys.modules if k.startswith("jopml_user.")]:
+                sys.modules.pop(k, None)
+
+
+def test_v176_cheatmenu():
+    from modules.cheatmenu import cheats, gta_input, trainer
+    from modules.cheatmenu.plugin import Plugin
+    ids = [c.id for c in cheats.MINECRAFT + cheats.GTA]
+    check(len(ids) == len(set(ids)) and len(cheats.MINECRAFT) >= 44 and len(cheats.GTA) >= 25, "Cheat-IDs eindeutig, genug Cheats")
+    check(all(c.commands for c in cheats.ALL.values()), "jeder Cheat hat Befehle")
+    check(all(cmd.startswith("/") for c in cheats.MINECRAFT for cmd in c.commands), "Minecraft-Befehle beginnen mit /")
+    check(all(code.isalnum() and code.isupper() for c in cheats.GTA for code in c.commands), "GTA-Codes sind Buchstaben/Ziffern")
+    script = cheats.minecraft_script(("/gamemode creative", "/time set day"), 3, "t")
+    check("wait 3000ms" in script and script.count("key t") == 2 and script.count("key enter") == 2 and 'type "/time set day"' in script, "Minecraft-Makro")
+    check(cheats.check_command("give @s minecraft:diamond") == "/give @s minecraft:diamond", "Schrägstrich ergänzt")
+    for bad in ("", "  ", 'say "hi"', "say #x", "a" * 300, "say a\nb"):
+        raises(ValueError, cheats.check_command, bad)
+    steps = gta_input.plan(["PAINKILLER", "TURTLE"])
+    check(steps[0] == ("console",) and steps.count(("enter",)) == 2 and ("char", "p") in steps, "GTA-Ablauf")
+    check(gta_input.plan(["a b!c"]) == gta_input.plan(["abc"]), "GTA-Code wird bereinigt")
+    check(trainer.board_kind("Zickzack", 30, 1.0, 10, False) == "recoil_zigzag" and trainer.board_kind("Gerade hoch", 30, 1.0, 10, False) == "recoil_up", "Bestenlisten-Zuordnung")
+    check(not trainer.board_kind("Zickzack", 12, 1.0, 10, False) and not trainer.board_kind("Zickzack", 30, 0.5, 10, False)
+          and not trainer.board_kind("Zickzack", 30, 1.0, 15, False) and not trainer.board_kind("Zickzack", 30, 1.0, 10, True), "nur volle Standardrunden zählen")
+    check(set(trainer.BOARD_KINDS) == set(trainer.PATTERNS), "jedes Muster hat eine Bestenliste")
+    # Rückstoß-Trainer: reine Übung, keine Eingaben
+    check(len(trainer.pattern("Gerade hoch")) == trainer.SHOTS, "Trainer-Muster")
+    r = trainer.Round(trainer.pattern("Gerade hoch"))
+    r.start(100, 300)
+    path = trainer.ideal_path((100, 300), r.pat)
+    for x, y in path:
+        r.shot(x, y)
+    check(r.done and r.result()["score"] == 100, "perfekter Ausgleich = 100 Punkte")
+    r2 = trainer.Round(trainer.pattern("Zickzack"))
+    r2.start(100, 300)
+    while not r2.done:
+        r2.shot(100, 300)
+    check(r2.result()["score"] < 30, "ohne Ausgleich wenig Punkte")
+    import inspect
+    src = inspect.getsource(trainer) + (ROOT / "modules" / "cheatmenu" / "trainer_view.py").read_text(encoding="utf-8")
+    check("SendInput" not in src and "pynput" not in src and "mouse_event" not in src, "Trainer sendet keine Eingaben")
+    # Plugin: Hotkeys und Ausführen mit Attrappen
+    from core.hotkey_registry import Registry
+
+    class FakeMacros:
+        state = "idle"
+
+        def run(self, text, backend=None):
+            self.text = text
+            return ""
+
+        def stop(self):
+            pass
+
+    class FakeApp:
+        def __init__(self):
+            self.settings = {}
+            self.macros = FakeMacros()
+            self.hotkeys = Registry(self)
+            self.plugin_by_id = {"macros": self.macros}
+
+        def save_settings(self):
+            pass
+
+        def after(self, ms, fn):
+            fn()
+
+    app = FakeApp()
+    p = Plugin(app)
+    p.on_load()
+    check(f"cm.{cheats.GTA[0].id}" in app.hotkeys.entries and "cm.mc_creative" in app.hotkeys.entries, "Hotkey-Einträge")
+    check(len([e for e in app.hotkeys.entries.values() if e.group == "Cheat menu"]) == len(cheats.ALL), "ein Hotkey je Cheat")
+    check(p.run("mc_creative", hotkey=True) == "" and "/gamemode creative" in app.macros.text and "wait 3000" not in app.macros.text, "Hotkey ohne Wartezeit")
+    check(p.run("mc_custom", custom="give @s minecraft:beacon") == "" and "/give @s minecraft:beacon" in app.macros.text, "eigener Befehl")
+    check(p.run("mc_custom", custom='say "x"') != "", "ungültiger eigener Befehl abgelehnt")
+    check(p.run("gibt_es_nicht") == "Unbekannter Cheat.", "unbekannter Cheat")
+    p.set_cfg(delay=5, evil="x")
+    check(p.cfg()["delay"] == 5 and "evil" not in p.cfg(), "Einstellungen gefiltert")
+    check(i18n.tr("Cheat menu") == "Cheat menu", "Name (Englisch)")
+    i18n.set_language("de")
+    check(i18n.tr("Cheat menu") == "Cheat-Menü", "Name (Deutsch)")
+    i18n.set_language("en")
+
+
+def test_v177_module_share_client():
+    import tempfile
+    from pathlib import Path
+    from core import module_import
+    from modules.community import modshare
+    from modules.community.service import CommunityError
+
+    ok_code = "from core.plugin_api import BasePlugin\n\n\nclass Plugin(BasePlugin):\n    id = 'x'\n    name = 'X'\n"
+    check(modshare.risk_notes({"plugin.py": ok_code}) == [], "harmloser Code ohne Hinweise")
+    bad = "import subprocess, base64\nimport requests\nexec('1')\nopen('a.txt', 'w')\nimport os\nos.system('x')\nos.remove('y')\nu = 'http://x.y'\n"
+    notes = modshare.risk_notes({"plugin.py": bad})
+    joined = " ".join(notes)
+    for needle in ("subprocess", "base64", "requests", "exec()", "open(", "system()", "remove()", "web addresses"):
+        check(needle in joined, f"Hinweis auf {needle}: {notes}")
+    check(any("not valid Python" in n for n in modshare.risk_notes({"plugin.py": "def ("})), "Syntaxfehler gemeldet")
+    check(any("encoded" in n for n in modshare.risk_notes({"plugin.py": "x = '" + "A" * 300 + "'"})), "langer kodierter Block")
+    good = {"plugin.py": ok_code, "daten.json": "{}"}
+    check(modshare.check_for_publish("mein_modul", "Mein Modul", "", good) == "", "gültig")
+    for name, title, files in (("Mein Modul", "Mein Modul", good), ("mein_modul", "ab", good), ("mein_modul", "Mein Modul", {"daten.json": "{}"}),
+                               ("mein_modul", "Mein Modul", {"plugin.py": ok_code, "x.exe": "x"}), ("mein_modul", "Mein Modul", {"plugin.py": ok_code, "../x.py": "x"}),
+                               ("mein_modul", "Mein Modul", {"plugin.py": "x = 1\n"}), ("mein_modul", "Scheiße Modul", good),
+                               ("mein_modul", "Mein Modul", {"plugin.py": ok_code, **{f"f{i}.txt": "x" for i in range(40)}})):
+        check(modshare.check_for_publish(name, title, "", files), f"abgelehnt: {name} {title} {list(files)[:3]}")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / "user"
+        # Installieren aus geteilten Dateien (Rundlauf: installieren -> wieder einlesen)
+        name = modshare.install({"plugin.py": ok_code, "sub/daten.json": "{}"}, "geteilt", root=root, builtin={"gamer"})
+        check(name == "geteilt" and (root / "geteilt" / "plugin.py").is_file() and (root / "geteilt" / "sub" / "daten.json").is_file(), "Installation")
+        back = modshare.collect_installed("geteilt", root=root)
+        check(back == {"plugin.py": ok_code, "sub/daten.json": "{}"}, f"Rundlauf: {back}")
+        raises(module_import.ImportErrorJOPML, modshare.install, {"plugin.py": ok_code}, "geteilt", root=root, builtin={"gamer"})
+        raises(module_import.ImportErrorJOPML, modshare.install, {"plugin.py": ok_code}, "gamer", root=root, builtin={"gamer"})
+        raises(module_import.ImportErrorJOPML, modshare.install, {"plugin.py": ok_code, "../evil.py": "x"}, "böse", root=root, builtin=set())
+        check(not (Path(d) / "evil.py").exists(), "kein Schreiben außerhalb des Ordners")
+        modshare.install({"plugin.py": ok_code + "# neu\n"}, "geteilt", replace=True, root=root, builtin={"gamer"})
+        check("# neu" in (root / "geteilt" / "plugin.py").read_text(encoding="utf-8"), "Ersetzen")
+        # Binärdateien lassen sich nicht teilen
+        (root / "geteilt" / "bild.png").write_bytes(b"\x89PNG")
+        try:
+            modshare.collect_installed("geteilt", root=root)
+            check(False, "Bild darf nicht geteilt werden")
+        except CommunityError as exc:
+            check("bild.png" in str(exc), "Hinweis auf nicht teilbare Datei")
+        raises(CommunityError, modshare.collect_installed, "gibtsnicht", root=root)
 
 
 def main():

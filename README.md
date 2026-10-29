@@ -1,6 +1,6 @@
 # Jaron's OP Makro Launcher (JOPML) – v1.1
 
-Modularer Launcher (Python, CustomTkinter, pynput) mit Auto-Clicker, Makro-Editor, Extensions und Recoil-Modul.
+Modularer Launcher (Python, CustomTkinter, pynput) mit Auto-Clicker, Makro-Editor, Extensions und Spiele-Makros.
 Download der fertigen Windows-EXE: <https://github.com/delft-ante/JOPML/releases/latest/download/JaronsOPMakro.exe>
 
 ## Entwickeln
@@ -28,11 +28,11 @@ EXE lokal bauen: `EXE_BAUEN.bat` (Windows).
 5. Push auf `main` unter `supabase/` rollt alles aus. In Auth muss "Confirm email" aus sein (Konten ohne E-Mail).
 
 ## Struktur
-`core/` Kern (Konten, Cloud, Design, Sprachen, Rechtstext), `modules/` Plugins (autoclicker, macros, extensions, recoil),
+`core/` Kern (Konten, Cloud, Design, Sprachen, Rechtstext), `modules/` Plugins (autoclicker, macros, extensions),
 `supabase/` Datenbank + Edge Function, `csharp/` ungetestete Avalonia-Vorlage, `tools/` Hilfsskripte, `tests/` Tests.
 
 ## Hinweise
-Das Recoil-Modul ist nur für Offline-Spiele gedacht; moderne Anti-Cheat-Systeme können es erkennen. Der Rechtstext wurde nicht anwaltlich geprüft.
+Spiele-Makros sind nur für Einzelspieler-, Idle- und eigene Server gedacht. Der Rechtstext wurde nicht anwaltlich geprüft.
 `server_examples/assistant_worker.js` ist ein optionaler eigener KI-Endpunkt (Anthropic, ungetestet); der Standard ist die Supabase-Funktion mit Gemini.
 
 ## Neue Version veröffentlichen (ohne GitHub)

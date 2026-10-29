@@ -1,4 +1,4 @@
-"""Notaus: ein globaler Tastenkürzel (und ein Knopf) stoppt Autoclicker, Makros und Recoil sofort."""
+"""Notaus: ein globaler Tastenkürzel (und ein Knopf) stoppt Autoclicker und Makros sofort."""
 import traceback
 
 from core import config
@@ -11,14 +11,7 @@ def stop_everything(app) -> list[str]:
     stopped = []
     for p in getattr(app, "plugins", []):
         try:
-            if p.id == "recoil":
-                if getattr(p, "enabled", False):
-                    p.set_enabled(False)
-                    page = app.pages.get(p.id)
-                    if page is not None and page.winfo_exists():
-                        page.refresh()
-                    stopped.append(p.id)
-            elif p.id == "autoclicker":
+            if p.id == "autoclicker":
                 if p.engine is not None and p.engine.running:
                     p.stop()
                     stopped.append(p.id)

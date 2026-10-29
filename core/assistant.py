@@ -40,9 +40,6 @@ FAQ = [
      "use the AI when you are signed in with a cloud account. Every macro is checked before it runs. F7 starts/stops."),
     (("extension", "erweiterung", "browser", "browsing", "links", "notiz", "notes", "suche", "search"),
      "Under 'Extensions' add ready-made extensions (Quick links, Web search, Notes) with one click, switch them on or off and configure them there."),
-    (("recoil", "rückstoß", "rueckstoss", "shooter", "anti-recoil", "ruckstoss"),
-     "The 'Recoil' module pulls the mouse down while the left button is held. It can very easily be detected by anti-cheat systems and is meant "
-     "only for offline games for education and testing. You must confirm the warning before it can be switched on. F8 toggles it."),
     (("update", "aktualisieren", "version", "neue version"),
      "On start the launcher checks for updates automatically. If there is one, a window with 'Update now' appears. You can also check manually on the dashboard."),
     (("smartscreen", "blockiert", "blocked", "virus", "antivirus", "defender", "startet nicht", "does not start"),
@@ -81,6 +78,9 @@ FAQ = [
      "as a layout. In a layout, 'discord:right@2' puts Discord on monitor 2 (counted from left to right)."),
     (("overlay bleibt", "overlays bleiben", "overlay nach neustart", "overlay after restart", "overlays stay"),
      "Overlays that were switched on when you closed the program come back automatically at the next start."),
+    (("modul importieren", "module importieren", "import module", "eigenes modul", "own module", "plugin importieren", "modul hinzufügen"),
+     "Under Settings → System → Import modules you can add your own module from a folder, a .zip file, a single .py file or by pasting code (it needs a plugin.py with a class Plugin). "
+     "A module is program code with all rights of the program, so import only modules you trust. It is loaded at the next start, stays when the program is updated and can be removed in the same place."),
     (("kontakt", "contact", "feedback", "fehler melden", "bug", "idee", "idea", "vorschlag"),
      "Send feedback and bug reports through 'Contact' in the sidebar."),
 ]
