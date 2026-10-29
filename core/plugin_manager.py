@@ -3,6 +3,8 @@ import importlib
 import pkgutil
 import traceback
 
+from core.i18n import tr
+
 
 def _module_names() -> list[str]:
     import modules
@@ -58,12 +60,18 @@ def discover(app):
         except Exception as exc:  # ein kaputtes Modul darf den Launcher nicht stoppen
             traceback.print_exc()
             failed.append((name, f"{type(exc).__name__}: {exc}"))
-    taken = {p.id for p in plugins} | {"dashboard", "settings", "assistant", "contact"}
+    owner = {p.id: p.name for p in plugins}
+    for reserved in ("dashboard", "settings", "assistant", "contact"):
+        owner.setdefault(reserved, reserved)
     for name, plugin in user_plugins:           # importierte Module dürfen kein eingebautes Modul ersetzen
-        if getattr(plugin, "id", None) in taken or not isinstance(getattr(plugin, "id", None), str):
-            failed.append((name, "The module id is already in use."))
+        pid = getattr(plugin, "id", None)
+        if not isinstance(pid, str) or not pid.strip():
+            failed.append((name, tr("The module has no valid id. Set a text id in the Plugin class (id = \"my_module\").")))
             continue
-        taken.add(plugin.id)
+        if pid in owner:
+            failed.append((name, tr("The module id \"{id}\" is already used by \"{other}\". Choose a different id in plugin.py.", id=pid, other=owner[pid])))
+            continue
+        owner[pid] = plugin.name
         plugins.append(plugin)
     plugins.sort(key=lambda p: (p.order, p.name))
     return plugins, failed

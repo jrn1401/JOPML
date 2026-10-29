@@ -234,11 +234,12 @@ class CheatMenuPage(ctk.CTkFrame):
                 from modules.community.market import MarketService
                 svc = comm.service() if comm else None
                 if svc is None:
+                    app.call_soon(self._say, tr("Not sent to the leaderboard: sign in with a cloud account and set up the community first."), False)
                     return
                 best = MarketService(svc).submit_score(kind, res["score"])
                 app.call_soon(self._say, tr("Sent to the leaderboard (Community > Leaderboards). Your best: {v}", v=f"{best:g}"))
-            except Exception:
-                pass                                  # ohne Konto oder Netz zählt die Runde nur lokal
+            except Exception as exc:                  # ohne Konto oder Netz zählt die Runde nur lokal – aber das wird angezeigt
+                app.call_soon(self._say, tr("Could not send the score to the leaderboard: {e}", e=str(exc)[:160]), False)
         threading.Thread(target=work, daemon=True).start()
 
     def _help(self, tab):
