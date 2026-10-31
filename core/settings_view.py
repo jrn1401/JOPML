@@ -13,6 +13,7 @@ import customtkinter as ctk
 from core.tabbar import WrapTabs
 
 from core import accounts, appicon, background, config, i18n, layout, shortcuts, system_limits, theme, ui
+from core.account_backup_ui import restore_account_file
 from core.credits import CREDITS
 from core.i18n import LANGS, tr
 from core.identity import REMEMBER_CHOICES
@@ -22,8 +23,6 @@ from core.version import APP_NAME, APP_VERSION, LEGAL_VERSION
 
 SCALES = [80, 90, 100, 110, 125, 150]
 SECTIONS = ["Account", "Appearance", "Layout", "Language", "System", "Notifications", "Hotkeys", "Performance", "Legal & sources"]
-
-
 class SettingsView(ctk.CTkFrame):
     def __init__(self, parent, app):
         super().__init__(parent, fg_color=theme.c("main"))
@@ -108,6 +107,16 @@ class SettingsView(ctk.CTkFrame):
         body = self._card("Password")
         ui.banner(body, "🔒 " + tr("The password cannot be changed after the account has been created (security rule). "
                                    "There is no recovery – if you lose it, create a new account."), color="#92400e").pack(fill="x")
+
+        if me.get("backend") == "local" and me.get("has_password"):
+            body = self._card("Account backup")
+            ui.muted(body, "Save your local account in an encrypted file (protected by a passphrase you choose) to move it to another computer or restore it after a reinstall. "
+                           "The backup does not contain your password in readable form and cannot bring back a forgotten password.").pack(fill="x", pady=(0, 6))
+            self.m_acc_bak = self._msg(body)
+            r = ctk.CTkFrame(body, fg_color="transparent")
+            r.pack(fill="x")
+            ctk.CTkButton(r, text=tr("Save account backup …"), width=190, command=self._account_backup_save).pack(side="left")
+            ctk.CTkButton(r, text=tr("Restore account backup …"), width=200, command=self._account_backup_restore).pack(side="left", padx=8)
 
         body = self._card("Stay signed in")
         r = ctk.CTkFrame(body, fg_color="transparent")
@@ -661,6 +670,38 @@ class SettingsView(ctk.CTkFrame):
         ui.muted(body, "Only stored on this computer. Nothing is sent.").pack(fill="x", pady=(6, 0))
         ctk.CTkButton(body, text=tr("Reset statistics"), width=150, fg_color="gray35", hover_color="gray25",
                       command=lambda: (stats.reset(), self._render_stats())).pack(anchor="w", pady=(6, 0))
+
+    def _ask(self, title, text):
+        dlg = ctk.CTkInputDialog(title=title, text=text)
+        v = dlg.get_input()
+        return v if v else ""
+
+    def _account_backup_save(self):
+        from core import account_backup
+        me = self._me()
+        pw = self._ask(tr("Account backup"), tr("Your account password (to confirm):"))
+        if not pw:
+            return
+        phrase = self._ask(tr("Account backup"), tr("Choose a passphrase for the backup file (at least {n} characters). Without it the file cannot be opened:", n=account_backup.MIN_PASSPHRASE))
+        if not phrase:
+            return
+        try:
+            text = account_backup.export_account(self.app.accounts, me["username"], pw, phrase)
+        except (account_backup.BackupError, accounts.AccountError) as exc:
+            self._say(self.m_acc_bak, str(exc), False)
+            return
+        path = filedialog.asksaveasfilename(defaultextension=".jopmacc", initialfile=f"{me['username']}.jopmacc", filetypes=[("JOPML account", "*.jopmacc")])
+        if not path:
+            return
+        try:
+            Path(path).write_text(text, encoding="utf-8")
+        except OSError as exc:
+            self._say(self.m_acc_bak, f"{type(exc).__name__}: {exc}", False)
+            return
+        self._say(self.m_acc_bak, tr("Account backup saved. Keep the file and the passphrase safe."))
+
+    def _account_backup_restore(self):
+        restore_account_file(self.app.accounts, self.m_acc_bak)
 
     def _backup_save(self):
         from core import backup

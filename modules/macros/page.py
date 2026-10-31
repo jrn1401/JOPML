@@ -38,6 +38,15 @@ GEN_EXAMPLES = [("Fast clicking", "Click every 50 ms for 2 minutes"),
                 ("Random pauses", "Click at 500 300, then at 700 400 with random pauses of 100 to 300 ms, 100 times")]
 
 
+# Autovervollständigung: Befehl -> Schreibweise (kurze Syntaxhilfe)
+COMPLETIONS = {
+    "click": "click [left|right|middle] [X Y]", "doubleclick": "doubleclick [left|right|middle] [X Y]", "move": "move X Y",
+    "key": "key NAME", "hold": "hold NAME DURATION", "down": "down NAME", "up": "up NAME", "type": 'type "text"',
+    "scroll": "scroll N", "wait": "wait 100ms", "repeat": "repeat N … end", "set": "set NAME N", "add": "add NAME N",
+    "if": "if NAME == N … end", "else": "else", "end": "end", "stop": "stop",
+}
+
+
 class MacroPage(ctk.CTkScrollableFrame):
     def __init__(self, parent, plugin):
         super().__init__(parent, fg_color=theme.c("main"))
@@ -89,7 +98,12 @@ class MacroPage(ctk.CTkScrollableFrame):
         except Exception:
             pass
         self._live_job = None
+        self._tip = None
+        self._sugg = None
         self.text.bind("<KeyRelease>", self._typed)
+        self.text.bind("<Tab>", self._accept_suggestion)
+        self.text.bind("<Escape>", lambda _e: self._hide_suggestions())
+        self.text.bind("<FocusOut>", lambda _e: self.after(150, self._hide_suggestions))
         ctl = ui.row(e)
         ctl.pack(fill="x", padx=16, pady=(0, 6))
         ctk.CTkButton(ctl, text="▶  " + tr("Run"), width=110, fg_color="#2e9d5b", hover_color="#247a47",
@@ -145,8 +159,95 @@ class MacroPage(ctk.CTkScrollableFrame):
         except Exception:
             pass
 
+    # ---------- Autovervollständigung (Befehle am Zeilenanfang)
+    def _current_word(self):
+        """(Präfix, Startindex) des Wortes am Zeilenanfang, das gerade getippt wird, sonst ('', None)."""
+        try:
+            tb = self.text._textbox
+            line = tb.get("insert linestart", "insert")
+        except Exception:
+            return "", None
+        stripped = line.lstrip()
+        if not stripped or " " in stripped or "\t" in stripped or stripped.startswith("#"):
+            return "", None
+        return stripped.lower(), f"insert-{len(stripped)}c"
+
+    def _matches(self, prefix):
+        return [c for c in COMPLETIONS if c.startswith(prefix) and c != prefix][:6] if prefix else []
+
+    def _hide_suggestions(self):
+        if self._sugg is not None:
+            try:
+                self._sugg.destroy()
+            except Exception:
+                pass
+            self._sugg = None
+
+    def _show_suggestions(self):
+        prefix, _start = self._current_word()
+        names = self._matches(prefix)
+        self._hide_suggestions()
+        if not names:
+            return
+        try:
+            tb = self.text._textbox
+            x, y, _w, h = tb.bbox("insert")
+            box = ctk.CTkFrame(self.text, fg_color=theme.c("card"), corner_radius=8, border_width=1, border_color=theme.c("hover"))
+            for n in names:
+                ctk.CTkButton(box, text=COMPLETIONS[n], anchor="w", height=24, corner_radius=6, fg_color="transparent", text_color=theme.TEXT,
+                              hover_color=theme.c("hover"), command=lambda n=n: self._complete(n)).pack(fill="x", padx=4, pady=1)
+            box.place(x=x + 6, y=y + h + 4)
+            self._sugg = box
+        except Exception:
+            self._sugg = None
+
+    def _complete(self, name):
+        prefix, start = self._current_word()
+        if start is None:
+            return
+        tb = self.text._textbox
+        tb.delete(start, "insert")
+        tb.insert("insert", name + " ")
+        self._hide_suggestions()
+        self.text.focus_set()
+        self._typed()
+
+    def _accept_suggestion(self, _e=None):
+        """Tab übernimmt den ersten Vorschlag (ohne Vorschläge bleibt Tab ein normaler Tabulator)."""
+        prefix, _start = self._current_word()
+        names = self._matches(prefix)
+        if self._sugg is not None and names:
+            self._complete(names[0])
+            return "break"
+        return None
+
+    # ---------- Fehlerhinweis direkt an der Zeile
+    def _show_tip(self, text, line):
+        """Kleiner Hinweis neben der fehlerhaften Zeile (verschwindet nach einigen Sekunden)."""
+        self._hide_tip()
+        try:
+            tb = self.text._textbox
+            x, y, _w, h = tb.bbox(f"{line}.0")
+            tip = ctk.CTkLabel(self.text, text="⚠ " + text, fg_color="#7f1d1d", text_color="#ffffff", corner_radius=6, wraplength=420,
+                               justify="left", padx=8, pady=4)
+            tip.place(x=min(max(x + 40, 8), 200), y=y + h + 2)
+            self._tip = tip
+            self.after(6000, self._hide_tip)
+        except Exception:
+            self._tip = None
+
+    def _hide_tip(self):
+        if self._tip is not None:
+            try:
+                self._tip.destroy()
+            except Exception:
+                pass
+            self._tip = None
+
     def _typed(self, _e=None):
         """Während des Tippens (nach kurzer Pause) prüfen: Fehler erscheinen sofort in der Zeile."""
+        self._hide_tip()
+        self._show_suggestions()
         if self._live_job is not None:
             self.after_cancel(self._live_job)
         self._live_job = self.after(700, self._live_check)
@@ -193,6 +294,7 @@ class MacroPage(ctk.CTkScrollableFrame):
         except dsl.MacroError as exc:
             self._mark(exc.line)
             self._say(str(exc), False)
+            self._show_tip(str(exc), exc.line)
             return False
         self._mark(0)
         self._say(tr("OK – {n} top-level commands.", n=len(cmds)))

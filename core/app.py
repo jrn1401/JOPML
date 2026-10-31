@@ -376,6 +376,34 @@ class LauncherApp(ctk.CTk):
         self.update_idletasks()
         return done
 
+    def restart(self):
+        """Startet den Launcher neu (fragt vorher nach; laufende Makros und Skripte werden gestoppt)."""
+        from tkinter import messagebox
+        if not messagebox.askyesno(tr("Restart launcher"), tr("Restart the launcher now? Running macros and scripts are stopped.")):
+            return
+        import shlex
+        import subprocess
+        import sys
+        from core import shortcuts
+        try:
+            self.panic()
+        except Exception:
+            traceback.print_exc()
+        cmd = shortcuts.command()
+        env = dict(os.environ)
+        env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"          # die neue Instanz entpackt sich selbst neu (EXE im Einzeldatei-Modus)
+        try:
+            if sys.platform.startswith("win"):
+                flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+                subprocess.Popen(["cmd", "/c", "timeout /t 2 /nobreak >nul & start \"\" " + shortcuts._quote_win(cmd)],
+                                 creationflags=flags, close_fds=True, env=env)
+            else:
+                subprocess.Popen(["sh", "-c", "sleep 1; exec " + shlex.join(cmd)], start_new_session=True, close_fds=True, env=env)
+        except Exception as exc:
+            messagebox.showerror(tr("Restart launcher"), tr("Error: {e}", e=f"{type(exc).__name__}: {exc}"))
+            return
+        self.close()
+
     def _shutdown_plugins(self):
         self.hotkeys.shutdown()
         if self.panic_key is not None:
@@ -419,6 +447,8 @@ class LauncherApp(ctk.CTk):
         self._build_ad_box(bottom)           # unten links
         self.user_label = ctk.CTkLabel(bottom, text="", anchor="w", font=ctk.CTkFont(weight="bold"))
         self.user_label.pack(fill="x", padx=20, pady=(8, 2))
+        ctk.CTkButton(bottom, text="↻  " + tr("Restart launcher"), height=30, corner_radius=8, fg_color=theme.c("hover"),
+                      hover_color=theme.c("inset"), text_color=theme.TEXT, command=self.restart).pack(fill="x", padx=12, pady=(2, 2))
         ctk.CTkButton(bottom, text="■  " + tr("Emergency stop"), height=30, corner_radius=8, fg_color="#b91c1c",
                       hover_color="#7f1d1d", text_color="white", command=self.panic).pack(fill="x", padx=12, pady=(2, 4))
         self._add_nav("settings", "⚙  " + tr("Settings"), parent=bottom)
@@ -427,10 +457,13 @@ class LauncherApp(ctk.CTk):
         ctk.CTkButton(bottom, text="⎋  " + tr("Sign out"), anchor="w", height=36, corner_radius=8, fg_color="transparent",
                       text_color=theme.TEXT, hover_color=theme.c("hover"), command=self.logout).pack(fill="x", padx=12, pady=2)
         ctk.CTkLabel(bottom, text=f"v{APP_VERSION}", text_color=theme.MUTED).pack(pady=(4, 0))
-        self._add_nav("dashboard", "⌂  " + tr("Dashboard"))
+        # Die Menüpunkte liegen in einem scrollbaren Bereich: bei einem kleinen Fenster (nicht Vollbild) sind trotzdem alle Module erreichbar.
+        self.nav_area = ctk.CTkScrollableFrame(self.sidebar, fg_color="transparent", corner_radius=0, width=200)
+        self.nav_area.pack(fill="both", expand=True, padx=(0, 2))
+        self._add_nav("dashboard", "⌂  " + tr("Dashboard"), parent=self.nav_area)
         for pid, label in self.nav_entries():
             if pid not in ("assistant", "contact"):      # stehen fest unten: Einstellungen, Hilfe-Assistent, Kontakt, Abmelden
-                self._add_nav(pid, label)
+                self._add_nav(pid, label, parent=self.nav_area)
         self.refresh_user_labels()
         self._compact = None
         self._fit_sidebar()
@@ -481,7 +514,7 @@ class LauncherApp(ctk.CTk):
             if level >= 2:
                 self.logo.pack_forget()
             elif not self.logo.winfo_manager():
-                self.logo.pack(padx=20, pady=(24, 14), anchor="w", before=self.nav["dashboard"])
+                self.logo.pack(padx=20, pady=(24, 14), anchor="w", before=self.nav_area)
         except Exception:
             traceback.print_exc()
 

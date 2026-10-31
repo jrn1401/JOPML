@@ -99,9 +99,16 @@ class LoginView(ctk.CTkFrame):
         if not self.ident.supports_google:
             ctk.CTkLabel(b, text=tr("Google sign-in needs the cloud server (not set up yet)."), text_color=theme.MUTED,
                          wraplength=320).pack(pady=(4, 0))
+        if self.mode == "login" and getattr(self.ident, "backend", "") == "local":
+            ctk.CTkButton(b, text=tr("Restore account backup …"), width=320, height=28, fg_color="transparent", text_color=theme.accent(),
+                          hover_color=theme.c("hover"), command=self._restore_backup).pack(pady=(6, 0))
         self.e_user.focus_set()
         for e in (self.e_user, self.e_pw):
             e.bind("<Return>", lambda _e: self.submit())
+
+    def _restore_backup(self):
+        from core.account_backup_ui import restore_account_file
+        restore_account_file(self.ident.store, self.msg)
 
     @staticmethod
     def _entry(parent, placeholder, secret=False):

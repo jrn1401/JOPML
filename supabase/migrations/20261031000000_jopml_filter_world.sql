@@ -18,7 +18,7 @@ language sql immutable set search_path = '' as $f$
       $q$*#•·×%^~$q$, repeat(chr(57344), 8)),
       $q$абвгдеёжзийклмнопрстуфхцчшщыэюяіїєґѕјһԁαβγεζηικμνοπρσςτυχωδθλξφψøđðłıæœþ01345789lvАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЫЭЮЯІЇЄҐЅЈҺԀΑΒΓΕΖΗΙΚΜΝΟΠΡΣΤΥΧΩΔΘΛΞΦΨØĐÐŁIÆŒÞLV$q$ || case when symbols then $q$@$!|+¡€£¢©§°¥µ$q$ else '' end || $q$ъь$q$,
       $q$abbgdeejziiklmhoppctyfxccwwieuaiiegsjhdabyeznikmuonpsstuxwdoiefyoddliaopoieastbgiuabbgdeejziiklmhoppctyfxccwwieuaiiegsjhdabyeznikmuonpstuxwdoiefyoddliaopiu$q$ || case when symbols then $q$asiitieeccsoyu$q$ else '' end),
-    $q$[^a-z 26㐀-䶿一-鿿぀-ヿᄀ-ᇿ؀-ۿݐ-ݿ֐-׿ऀ-ॿঀ-৿]$q$, $q$¤$q$, 'g'),
+    $q$[^a-z 26\ue000㐀-䶿一-鿿\u3040-ヿᄀ-ᇿ\u0600-ۿݐ-ݿ\u0590-\u05ffऀ-ॿঀ-\u09ff]$q$, $q$¤$q$, 'g'),
     '(.)\1{3,}', '\1\1\1', 'g')
 $f$;
 
@@ -26,10 +26,10 @@ $f$;
 create or replace function public.jopml_c_mkpat(kind text, w text) returns text[]
 language plpgsql immutable set search_path = '' as $f$
 declare n int; i int; c text; units text[] := '{}'; words text[]; parts text[] := '{}'; wi text; res text[] := '{}'; isc boolean;
-  sep constant text := $q$[¤26]{0,2}$q$; sepc constant text := $q$[¤ ]{0,2}$q$;
-  sps constant text := $q$[^a-z]{1,2}$q$; spw constant text := $q$[¤ 26]{1,3}$q$;
+  sep constant text := $q$[¤\ue00026]{0,2}$q$; sepc constant text := $q$[¤\ue000 ]{0,2}$q$;
+  sps constant text := $q$[^a-z]{1,2}$q$; spw constant text := $q$[¤\ue000 26]{1,3}$q$;
   bf constant text := $q$(?<![a-z])$q$; af constant text := $q$(?![a-z])$q$; wild constant text := chr(57344);
-  cj constant text := $q$[㐀-䶿一-鿿぀-ヿᄀ-ᇿ؀-ۿݐ-ݿ֐-׿ऀ-ॿঀ-৿]$q$;
+  cj constant text := $q$[㐀-䶿一-鿿\u3040-ヿᄀ-ᇿ\u0600-ۿݐ-ݿ\u0590-\u05ffऀ-ॿঀ-\u09ff]$q$;
 begin
   if kind = 'phrase' then
     foreach wi in array string_to_array(w, ' ') loop
@@ -73,11 +73,11 @@ insert into public.jopml_c_allow (pattern) values
 ($q$~Bs+h+i+t+a+k+e+[a-z]{0,4}~A$q$),
 ($q$~Bs+n+i+g+g+e+r+[a-z]{0,4}~A$q$),
 ($q$~Bn+i+g+g+a+r+d+[a-z]{0,4}~A$q$),
-($q$~Bc+u+m+[¤ 26]{1,3}i+a+u+d+e+[a-z]{0,4}~A$q$),
+($q$~Bc+u+m+[¤\ue000 26]{1,3}i+a+u+d+e+[a-z]{0,4}~A$q$),
 ($q$~Bp+u+s+s+y+c+a+t+[a-z]{0,4}~A$q$),
-($q$~Bp+u+s+s+y+[¤ 26]{1,3}w+i+i+i+o+w+[a-z]{0,4}~A$q$);
-update public.jopml_c_filter set pattern = regexp_replace(replace(replace(replace(replace(pattern, '~S', $q$[¤26]{0,2}$q$), '~T', '[^a-z]{1,2}'), '~B', '(?<![a-z])'), '~A', '(?![a-z])'), '~([a-z])', '(?:\1+|)', 'g');
-update public.jopml_c_allow set pattern = regexp_replace(replace(replace(replace(replace(pattern, '~S', $q$[¤26]{0,2}$q$), '~T', '[^a-z]{1,2}'), '~B', '(?<![a-z])'), '~A', '(?![a-z])'), '~([a-z])', '(?:\1+|)', 'g');
+($q$~Bp+u+s+s+y+[¤\ue000 26]{1,3}w+i+i+i+o+w+[a-z]{0,4}~A$q$);
+update public.jopml_c_filter set pattern = regexp_replace(replace(replace(replace(replace(pattern, '~S', $q$[¤\ue00026]{0,2}$q$), '~T', '[^a-z]{1,2}'), '~B', '(?<![a-z])'), '~A', '(?![a-z])'), '~([a-z])', '(?:\1+|)', 'g');
+update public.jopml_c_allow set pattern = regexp_replace(replace(replace(replace(replace(pattern, '~S', $q$[¤\ue00026]{0,2}$q$), '~T', '[^a-z]{1,2}'), '~B', '(?<![a-z])'), '~A', '(?![a-z])'), '~([a-z])', '(?:\1+|)', 'g');
 
 -- Liefert die Kategorie des ersten Treffers oder NULL, wenn der Text sauber ist.
 create or replace function public.jopml_c_check(t text) returns text

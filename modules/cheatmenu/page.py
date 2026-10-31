@@ -35,7 +35,7 @@ GTA 5 Enhanced (nur Story-Modus)
 Rückstoß-Trainer
 • Im Übungsfeld klicken und halten: Jeder Schuss reißt das Ziel nach oben. Zieh die Maus dagegen, damit die Treffer im blauen Ziel bleiben.
 • Die gestrichelte Hilfslinie zeigt, wohin die Maus müsste. Für echtes Training später ausschalten.
-• Bestenliste: Der Haken „Bestenliste“ (standardmäßig an) stellt feste Standardwerte ein (Stärke 1, 10 Schuss/s, Hilfslinie aus). Eine volle Runde (alle 30 Schüsse) geht dann automatisch an die Bestenliste des Musters in Community > Bestenlisten, wenn du ein Cloud-Konto und die Community eingerichtet hast. Die Punkte kommen von deinem Programm; der Server kann den Spielverlauf nicht prüfen.
+• Bestenliste: Der Haken „Bestenliste“ (standardmäßig an) stellt feste Standardwerte ein (Stärke 1, 10 Schuss/s, Hilfslinie aus). Verstellst du Stärke, Schuss/s oder die Hilfslinie, geht der Haken aus und die Runde zählt nur für dich. Eine volle Runde (alle 30 Schüsse) geht dann automatisch an die Bestenliste des Musters in Community > Bestenlisten, wenn du ein Cloud-Konto und die Community eingerichtet hast. Die Punkte kommen von deinem Programm; der Server kann den Spielverlauf nicht prüfen.
 • Der Trainer liest die Maus nur im eigenen Feld und gibt selbst keine Eingaben ab – er trainiert deine Hand und wirkt nicht in Spielen.
 
 Notaus und F7 aus dem Makro-Modul stoppen auch die Minecraft-Cheats."""
@@ -177,37 +177,58 @@ class CheatMenuPage(ctk.CTkFrame):
         pm.set(canvas.pattern_name)
         pm.pack(side="left", padx=(6, 14))
 
+        def custom_changed():
+            """Regler oder Hilfslinie verändert: die Runde zählt dann nicht mehr für die Bestenliste (Haken geht aus)."""
+            if getattr(self, "_loading_std", False):
+                return
+            if ranked.get():
+                ranked.deselect()
+            self._show_best()
+
+        def set_strength(v):
+            canvas.strength = round(float(v), 2)
+            custom_changed()
+
+        def set_rate(v):
+            canvas.rate = int(round(float(v)))
+            custom_changed()
+
+        def set_guide():
+            canvas.show_guide = bool(guide.get())
+            custom_changed()
+
         ctk.CTkLabel(top, text="Stärke").pack(side="left")
-        st = ctk.CTkSlider(top, from_=0.5, to=2.0, width=110, command=lambda v: setattr(canvas, "strength", float(v)))
+        st = ctk.CTkSlider(top, from_=0.5, to=2.0, width=110, command=set_strength)
         st.set(1.0)
         st.pack(side="left", padx=(6, 14))
 
         ctk.CTkLabel(top, text="Schuss/s").pack(side="left")
-        rt = ctk.CTkSlider(top, from_=5, to=15, number_of_steps=10, width=110, command=lambda v: setattr(canvas, "rate", int(v)))
+        rt = ctk.CTkSlider(top, from_=5, to=15, number_of_steps=10, width=110, command=set_rate)
         rt.set(10)
         rt.pack(side="left", padx=(6, 14))
 
-        guide = ctk.CTkCheckBox(top, text="Hilfslinie", command=lambda: setattr(canvas, "show_guide", bool(guide.get())))
-        guide.select()
+        guide = ctk.CTkCheckBox(top, text="Hilfslinie", command=set_guide)
+        guide.deselect()
+        canvas.show_guide = False
         guide.pack(side="left", padx=(0, 14))
 
         def ranked_changed():
-            """Bestenlisten-Runde: feste Standardwerte (Stärke 1, 10 Schuss/s, keine Hilfslinie), damit alle gleich spielen."""
-            on = bool(ranked.get())
-            if on:
-                canvas.strength, canvas.rate, canvas.show_guide = 1.0, 10, False
-                st.set(1.0)
-                rt.set(10)
-                guide.deselect()
-            for w in (st, rt, guide):
-                w.configure(state="disabled" if on else "normal")
+            """Haken an = feste Standardwerte (Stärke 1, 10 Schuss/s, keine Hilfslinie), damit alle gleich spielen. Die Regler bleiben immer bedienbar."""
+            if ranked.get():
+                self._loading_std = True
+                try:
+                    canvas.strength, canvas.rate, canvas.show_guide = 1.0, 10, False
+                    st.set(1.0)
+                    rt.set(10)
+                    guide.deselect()
+                finally:
+                    self._loading_std = False
             self._show_best()
 
         ranked = ctk.CTkCheckBox(top, text="Bestenliste", command=ranked_changed)
         ranked.select()
         ranked.pack(side="left")
         self.ranked = ranked
-        ranked_changed()
         desc.pack(fill="x", before=holder, pady=(0, 4))
         pick(canvas.pattern_name)
 

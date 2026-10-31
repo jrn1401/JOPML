@@ -1145,6 +1145,76 @@ def test_release_workflow_assets():
     check(first == f"Version {APP_VERSION}", f"RELEASE_NOTES beginnt mit {first!r}, APP_VERSION ist {APP_VERSION}")
 
 
+def test_lua_sandbox_real():
+    """Lua-Skripte mit der ECHTEN Lua-Engine (lupa): Sandbox, Ausbruchsversuche, Speicher-/Zeitgrenze, Stopp.
+    Läuft im CI (dort wird lupa installiert); lokal ohne lupa wird der Test übersprungen."""
+    real = sys.modules.get("lupa")
+    if real is None or not hasattr(real, "LuaRuntime"):
+        sys.modules.pop("lupa", None)
+    try:
+        import lupa  # noqa: F401
+    except Exception:
+        check(not os.environ.get("GITHUB_ACTIONS"), "Im CI muss lupa installiert sein (release.yml: pip install ... lupa)")
+        print("  (übersprungen: lupa nicht installiert)")
+        return
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::notice title=Lua-Sandbox::Test mit echter Lua-Engine (lupa {getattr(lupa, '__version__', '?')}, {lupa.LuaRuntime().lua_implementation})")
+    from modules.luascripts import runner
+
+    class Macros:
+        state = "idle"
+        def __init__(self): self.ran, self.stopped = [], False
+        def run(self, text):
+            self.ran.append(text)
+            return "bad macro" if text == "boom" else ""
+        def stop(self): self.stopped = True
+
+    def run(code, timeout=5, macros=None):
+        lines = []
+        r = runner.LuaRunner(code, lambda t, ok=True: lines.append((t, ok)), macros=macros or Macros(), max_seconds=timeout)
+        check(r.start() == "", "startet")
+        check(r.finished.wait(timeout + 10), f"endet: {code[:60]}")
+        return lines
+
+    out = run('print(1 + 2, "a")')
+    check(out[0] == ("3\ta", True) and out[-1] == (tr_("Script finished."), True), f"print: {out}")
+    m = Macros()
+    out = run('wait(5) macro("click left 1 2") print("ok")', macros=m)
+    check(m.ran == ["click left 1 2"] and ("ok", True) in out, f"wait/macro: {out}")
+    out = run('local ok, e = pcall(macro, "boom") print(type(e), e)')
+    check(out[0][0].startswith("string") and "bad macro" in out[0][0], f"Fehler kommen nur als Text an: {out}")
+    for name in runner.BLOCKED:
+        out = run(f'print(type({name}))')
+        check(out[0] == ("nil", True), f"{name} ist gesperrt: {out}")
+    escapes = [
+        'print(wait.__self__)', 'print(macro.__globals__)', 'print(wait["__self__"])',
+        'local ok, e = pcall(macro, "boom") print(e.__traceback__)',
+        'local ok, e = pcall(wait, "x") print(e.__class__)',
+        'print(type(python))', 'print(string.dump ~= nil and load == nil)',
+        'local t = getmetatable("") print(type(t.__index.dump))',
+    ]
+    for code in escapes:
+        out = run(code)
+        text = " ".join(t for t, _ in out)
+        check("class" not in text and "module" not in text and "function: builtin" not in text.lower()
+              and "<bound method" not in text and "Python" not in text.replace("access to Python objects is not allowed", ""),
+              f"kein Zugriff auf Python: {code} -> {out}")
+    out = run('local s = string.rep("x", 2^31) print(#s)')
+    check(out[-1][1] is False, f"Speichergrenze: {out[-1]}")
+    out = run("while true do end", timeout=1)
+    check(out[-1] == (tr_("Script stopped."), False), f"Endlosschleife: Zeitlimit greift: {out}")
+    out = run("local co = coroutine.wrap(function() while true do end end) co()", timeout=1)
+    check(out[-1] == (tr_("Script stopped."), False), f"Endlosschleife in Coroutine: {out}")
+    lines = []
+    r = runner.LuaRunner("while true do wait(1) end", lambda t, ok=True: lines.append((t, ok)), macros=Macros())
+    r.start()
+    time.sleep(0.3)
+    r.stop()
+    check(r.finished.wait(5) and lines[-1] == (tr_("Script stopped."), False), f"Stopp-Knopf: {lines}")
+    out = run("debug = nil sethook = nil print(1)")
+    check(out[0] == ("1", True), "Skript darf Globale überschreiben, ohne die Sandbox zu stören")
+
+
 def test_layout_and_background():
     from core import background, layout
     ids = ["autoclicker", "macros", "extensions", "recoil", "assistant", "contact"]
@@ -2559,78 +2629,34 @@ def test_v179_lua_scripts():
             sys.modules.pop("lupa", None)
 
 
-def test_lua_sandbox_real():
-    """Lua-Skripte mit der ECHTEN Lua-Engine (lupa): Sandbox, Ausbruchsversuche, Speicher-/Zeitgrenze, Stopp.
-    Läuft im CI (dort wird lupa installiert); lokal ohne lupa wird der Test übersprungen."""
-    real = sys.modules.get("lupa")
-    if real is None or not hasattr(real, "LuaRuntime"):
-        sys.modules.pop("lupa", None)
-    try:
-        import lupa  # noqa: F401
-    except Exception:
-        check(not os.environ.get("GITHUB_ACTIONS"), "Im CI muss lupa installiert sein (release.yml: pip install ... lupa)")
-        print("  (übersprungen: lupa nicht installiert)")
-        return
-    if os.environ.get("GITHUB_ACTIONS"):
-        print(f"::notice title=Lua-Sandbox::Test mit echter Lua-Engine (lupa {getattr(lupa, '__version__', '?')}, {lupa.LuaRuntime().lua_implementation})")
-    from modules.luascripts import runner
-
-    class Macros:
-        state = "idle"
-        def __init__(self): self.ran, self.stopped = [], False
-        def run(self, text):
-            self.ran.append(text)
-            return "bad macro" if text == "boom" else ""
-        def stop(self): self.stopped = True
-
-    def run(code, timeout=5, macros=None):
-        lines = []
-        r = runner.LuaRunner(code, lambda t, ok=True: lines.append((t, ok)), macros=macros or Macros(), max_seconds=timeout)
-        check(r.start() == "", "startet")
-        check(r.finished.wait(timeout + 10), f"endet: {code[:60]}")
-        return lines
-
-    out = run('print(1 + 2, "a")')
-    check(out[0] == ("3\ta", True) and out[-1] == (tr_("Script finished."), True), f"print: {out}")
-    m = Macros()
-    out = run('wait(5) macro("click left 1 2") print("ok")', macros=m)
-    check(m.ran == ["click left 1 2"] and ("ok", True) in out, f"wait/macro: {out}")
-    out = run('local ok, e = pcall(macro, "boom") print(type(e), e)')
-    check(out[0][0].startswith("string") and "bad macro" in out[0][0], f"Fehler kommen nur als Text an: {out}")
-    for name in runner.BLOCKED:
-        out = run(f'print(type({name}))')
-        check(out[0] == ("nil", True), f"{name} ist gesperrt: {out}")
-    escapes = [
-        'print(wait.__self__)', 'print(macro.__globals__)', 'print(wait["__self__"])',
-        'local ok, e = pcall(macro, "boom") print(e.__traceback__)',
-        'local ok, e = pcall(wait, "x") print(e.__class__)',
-        'print(type(python))', 'print(string.dump ~= nil and load == nil)',
-        'local t = getmetatable("") print(type(t.__index.dump))',
-    ]
-    for code in escapes:
-        out = run(code)
-        text = " ".join(t for t, _ in out)
-        check("class" not in text and "module" not in text and "function: builtin" not in text.lower()
-              and "<bound method" not in text and "Python" not in text.replace("access to Python objects is not allowed", ""),
-              f"kein Zugriff auf Python: {code} -> {out}")
-    out = run('local s = string.rep("x", 2^31) print(#s)')
-    check(out[-1][1] is False, f"Speichergrenze: {out[-1]}")
-    out = run("while true do end", timeout=1)
-    check(out[-1] == (tr_("Script stopped."), False), f"Endlosschleife: Zeitlimit greift: {out}")
-    out = run("local co = coroutine.wrap(function() while true do end end) co()", timeout=1)
-    check(out[-1] == (tr_("Script stopped."), False), f"Endlosschleife in Coroutine: {out}")
-    lines = []
-    r = runner.LuaRunner("while true do wait(1) end", lambda t, ok=True: lines.append((t, ok)), macros=Macros())
-    r.start()
-    time.sleep(0.3)
-    r.stop()
-    check(r.finished.wait(5) and lines[-1] == (tr_("Script stopped."), False), f"Stopp-Knopf: {lines}")
-    out = run("debug = nil sethook = nil print(1)")
-    check(out[0] == ("1", True), "Skript darf Globale überschreiben, ohne die Sandbox zu stören")
-
-
 def tr_(text):
     return i18n.tr(text)
+
+
+def test_v180_account_backup():
+    from core import account_backup as ab
+    s1 = accounts.AccountStore(Path(tempfile.mkdtemp(dir=TMP)))
+    s1.register("anna", "Anna", "anna@example.org", "geheim1234")
+    text = ab.export_account(s1, "anna", "geheim1234", "meine lange passphrase")
+    check("geheim1234" not in text and "anna@example.org" not in text, "Klartext steht nicht in der Datei")
+    raises(ab.BackupError, ab.export_account, s1, "anna", "falsch", "meine lange passphrase")
+    raises(ab.BackupError, ab.export_account, s1, "anna", "geheim1234", "kurz")
+    s2 = accounts.AccountStore(Path(tempfile.mkdtemp(dir=TMP)))
+    raises(ab.BackupError, ab.restore_account, s2, text, "falsche passphrase!")
+    raises(ab.BackupError, ab.restore_account, s2, "kein json", "x" * 12)
+    raises(ab.BackupError, ab.restore_account, s2, '{"format": "anderes"}', "x" * 12)
+    check(ab.restore_account(s2, text, "meine lange passphrase") == "anna", "Konto wiederhergestellt")
+    check(s2.authenticate("anna", "geheim1234")["display_name"] == "Anna", "Anmeldung mit altem Passwort klappt auf dem neuen PC")
+    raises(accounts.AccountError, s2.authenticate, "anna", "falsch1234")
+    raises(ab.BackupExists, ab.restore_account, s2, text, "meine lange passphrase")
+    check(ab.restore_account(s2, text, "meine lange passphrase", overwrite=True) == "anna", "Ersetzen mit Bestätigung")
+    broken = text[:-30] + ("A" * 10) + text[-20:]
+    raises(ab.BackupError, ab.restore_account, s2, broken, "meine lange passphrase")
+    # E-Mail eines anderen Kontos wird nicht doppelt vergeben
+    s3 = accounts.AccountStore(Path(tempfile.mkdtemp(dir=TMP)))
+    s3.register("bob", "Bob", "anna@example.org", "geheim1234")
+    ab.restore_account(s3, text, "meine lange passphrase")
+    check(s3.users["anna"]["email"] == "", "doppelte E-Mail wird weggelassen")
 
 
 def main():

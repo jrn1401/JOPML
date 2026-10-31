@@ -11,6 +11,12 @@ from core.version import APP_VERSION
 
 # (Version, [Änderungen]) – neueste zuerst
 CHANGELOG = [
+    ("1.8.0", ["New 'Restart launcher' button in the sidebar, right above the panic button (asks first, stops everything, then starts the launcher again).",
+               "The sidebar menu now scrolls, so in a small (non-fullscreen) window every module is reachable.",
+               "Recoil trainer: the strength, shots and guide controls can always be changed. Changing them unticks 'Leaderboard' (only standard values count for the lists); ticking it again resets the standard values.",
+               "Macro editor: a red tip with the exact error text appears under the editor when a line is wrong, and a suggestion list completes commands while you type (Tab accepts).",
+               "Account backup for local accounts (Settings): save an encrypted backup file (AES-256-GCM, own passphrase of at least 10 characters) and restore it on the login screen or in Settings. A backup does NOT recover a forgotten password.",
+               "Server updates (word filter for 40 languages, module sharing, recoil boards) are installed on the server; 'jopml-ai' knows the new features."]),
     ("1.7.9", ["Recoil trainer leaderboards: the new 'Leaderboard' tick box (on by default) sets the fixed standard values; before, the guide line was on by default, so no round ever counted. The trainer now also says why a round was not counted.",
                "New module 'Lua scripts' (menu item): run your own Lua scripts in a safe box (engine: lupa). A script can calculate, print(...), wait(ms) and run macro commands with macro(\"click left 500 300\") (same checks and panic key as the macro editor). os, io, require and similar are blocked; a counter hook ends endless loops when you press Stop or after 10 minutes. Add scripts on the page or in Settings > Import modules (\"Add Lua script …\"); .lua is now an allowed file type in imported module folders. Not tested with the real Lua engine yet."]),
     ("1.7.8", ["Recoil trainer leaderboards fixed: the server list now accepts the four pattern boards (the database update was missing before), and the trainer now says why a score was not sent (not signed in, no network) instead of staying silent.",
