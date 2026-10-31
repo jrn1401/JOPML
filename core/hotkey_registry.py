@@ -157,6 +157,16 @@ class Registry:
                 out.setdefault(k, []).extend(ids)
         return out
 
+    def suggest_free_key(self) -> str:
+        """Eine Taste, die bei keinem Eintrag belegt ist (Strg+Alt+F-Taste, dann Strg+Alt+Ziffer, dann Strg+Umschalt+Buchstabe). '' wenn alles belegt ist."""
+        used = {self.key_of(i) for i in self.entries if self.key_of(i)}
+        cands = [f"ctrl+alt+f{n}" for n in range(1, 13)] + [f"ctrl+alt+{n}" for n in range(1, 10)]
+        cands += [f"ctrl+shift+{c}" for c in "abcdefghijklmnopqrstuvwxyz"]
+        for c in map(normalize, cands):
+            if c not in used:
+                return c
+        return ""
+
     # ---- Profile (Export/Import) ----
     def snapshot(self) -> dict:
         snap = {}

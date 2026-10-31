@@ -276,7 +276,7 @@ class AutoClickerPage(ctk.CTkScrollableFrame):
             prof = self.plugin.load_profile_file(path)
             self.fill_from_profile(prof)
         except Exception as exc:
-            messagebox.showerror(tr("Load profile"), str(exc))
+            self.plugin.app.show_error(tr("Load profile"), str(exc), "E-MAC-002", self.winfo_toplevel())
             return
         self.apply()
 

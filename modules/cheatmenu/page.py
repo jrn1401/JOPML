@@ -1,18 +1,21 @@
 """Seite "Cheat-Menü": Reiter Minecraft / GTA 5 / Hilfe, jeder Cheat ist ein Knopf."""
 import threading
+import tkinter as tk
 
 import customtkinter as ctk
 
 from core.i18n import tr
 
-from . import cheats, gta_input, trainer
+from . import cheats, gta_input, trainer, weapons
 
 try:
     from core import theme
     _MAIN = theme.c("main")
+    _HOVER, _TEXT = theme.c("hover"), theme.TEXT
     _OK, _BAD = theme.OK, theme.DANGER
 except Exception:                      # falls sich das Design-Modul nach einem Update ändert
     _MAIN, _OK, _BAD = "transparent", "#2e9d5b", "#e5484d"
+    _HOVER, _TEXT = "gray35", "white"
 
 _COLS = 3
 
@@ -36,7 +39,17 @@ Rückstoß-Trainer
 • Im Übungsfeld klicken und halten: Jeder Schuss reißt das Ziel nach oben. Zieh die Maus dagegen, damit die Treffer im blauen Ziel bleiben.
 • Die gestrichelte Hilfslinie zeigt, wohin die Maus müsste. Für echtes Training später ausschalten.
 • Bestenliste: Der Haken „Bestenliste“ (standardmäßig an) stellt feste Standardwerte ein (Stärke 1, 10 Schuss/s, Hilfslinie aus). Verstellst du Stärke, Schuss/s oder die Hilfslinie, geht der Haken aus und die Runde zählt nur für dich. Eine volle Runde (alle 30 Schüsse) geht dann automatisch an die Bestenliste des Musters in Community > Bestenlisten, wenn du ein Cloud-Konto und die Community eingerichtet hast. Die Punkte kommen von deinem Programm; der Server kann den Spielverlauf nicht prüfen.
+• Waffe: fünf ausgedachte Übungswaffen (Standard, Pulse SMG, Heavy Driver, Burst Rifle, Ion Needler) mit eigener Stärke, Feuerrate, Schusszahl und Zugrichtung. Sie haben nichts mit echten Waffen oder Spielen zu tun. Nur „Standard“ zählt für die Bestenlisten; Bestwerte der anderen Waffen werden getrennt gespeichert.
+• Design: fünf Farbschemata (Classic, Neon, Paper, Mono, Sunset), dazu Fadenkreuz (Ring, Kreuz, Punkt) und Treffer-Markierung. Alles wird gemerkt.
+• Flüssig: das Feld zeichnet etwa 60 Bilder pro Sekunde, das Fadenkreuz gleitet, die Spur der Treffer blendet aus. „Wiederholen“ spielt die letzte Runde noch einmal ab.
+• Nach jeder Runde zeigt ein Tipp, in welche Richtung deine Treffer im Mittel abgewichen sind. Darunter siehst du Runden, Bestwert, Durchschnitt, Trend und Serie sowie ein kleines Diagramm der letzten Runden (lokal, höchstens 50).
 • Der Trainer liest die Maus nur im eigenen Feld und gibt selbst keine Eingaben ab – er trainiert deine Hand und wirkt nicht in Spielen.
+
+Rückstoß 3D
+• Derselbe Übungsgedanke in einem Raum mit echter Perspektive: Ziele auf die Scheibe an der Rückwand (nah 10 m, mittel 25 m, weit 50 m – je weiter, desto kleiner), klicke und halte. Die Scheibe steht fest oder pendelt seitlich.
+• Gewertet wird, wie nah die Einschläge an der Scheibenmitte bleiben (Punkte und Trefferquote). Bestwerte gelten je Muster, Entfernung und Zielart und nur für dich – die Community-Bestenlisten gehören zum 2D-Trainer.
+• „3D-Ansicht“ nach der Runde: Raum mit gedrückter Maustaste drehen, Mausrad zoomt. Du siehst alle Schüsse als Linien vom Schützen zur Wand.
+• Auch hier kannst du Übungswaffe und Design wählen. Dieser Trainer liest die Maus nur im eigenen Feld, gibt selbst keine Eingaben ab und hat mit keinem Spiel zu tun.
 
 Notaus und F7 aus dem Makro-Modul stoppen auch die Minecraft-Cheats."""
 
@@ -54,11 +67,12 @@ class CheatMenuPage(ctk.CTkFrame):
 
         tabs = ctk.CTkTabview(self)
         tabs.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 4))
-        for name in ("Minecraft", "GTA 5 Enhanced", "Rückstoß-Trainer", "Hilfe"):
+        for name in ("Minecraft", "GTA 5 Enhanced", "Rückstoß-Trainer", "Rückstoß 3D", "Hilfe"):
             tabs.add(name)
         self._minecraft(tabs.tab("Minecraft"))
         self._gta(tabs.tab("GTA 5 Enhanced"))
         self._trainer(tabs.tab("Rückstoß-Trainer"))
+        self._trainer3d(tabs.tab("Rückstoß 3D"))
         self._help(tabs.tab("Hilfe"))
 
         self.msg = ctk.CTkLabel(self, text="", anchor="w", justify="left", wraplength=640)
@@ -218,6 +232,8 @@ class CheatMenuPage(ctk.CTkFrame):
                 self._loading_std = True
                 try:
                     canvas.strength, canvas.rate, canvas.show_guide = 1.0, 10, False
+                    canvas.weapon_id = "standard"
+                    wm.set(weapons.weapon("standard")["name"])
                     st.set(1.0)
                     rt.set(10)
                     guide.deselect()
@@ -230,24 +246,252 @@ class CheatMenuPage(ctk.CTkFrame):
         ranked.pack(side="left")
         self.ranked = ranked
         desc.pack(fill="x", before=holder, pady=(0, 4))
+
+        # ---- Zeile 2: Waffe, Design, Fadenkreuz, Treffer-Markierung, Wiederholung
+        prefs = self.plugin.cfg().get("trainer_prefs")
+        prefs = dict(prefs) if isinstance(prefs, dict) else {}
+        top2 = ctk.CTkFrame(tab, fg_color="transparent")
+        top2.pack(fill="x", pady=(0, 4), before=holder)
+
+        def save_prefs():
+            self.plugin.set_cfg(trainer_prefs={"weapon": canvas.weapon_id, "skin": canvas.skin_name,
+                                               "crosshair": canvas.crosshair, "marker": canvas.marker})
+
+        def pick_weapon(name):
+            wid = weapons.weapon_id(name)
+            canvas.weapon_id = wid
+            w = weapons.weapon(wid)
+            self._loading_std = True
+            try:
+                canvas.strength, canvas.rate = float(w["strength"]), int(w["rate"])
+                st.set(min(2.0, max(0.5, canvas.strength)))
+                rt.set(min(15, max(5, canvas.rate)))
+            finally:
+                self._loading_std = False
+            if wid != "standard" and ranked.get():
+                ranked.deselect()
+            wdesc.configure(text=tr(w["descr"]) + "  (" + tr("{n} shots", n=w["shots"]) + ")")
+            save_prefs()
+            self._show_best()
+
+        def pick_skin(name):
+            canvas.set_skin(name)
+            self.spark.configure(bg=canvas.sk["bg"])
+            self._show_stats()
+            save_prefs()
+
+        def pick_cross(name):
+            canvas.crosshair = name
+            save_prefs()
+
+        def pick_marker(name):
+            canvas.marker = name
+            save_prefs()
+
+        ctk.CTkLabel(top2, text=tr("Weapon")).pack(side="left")
+        wm = ctk.CTkOptionMenu(top2, values=weapons.weapon_names(), width=130, command=pick_weapon)
+        wm.pack(side="left", padx=(6, 12))
+        ctk.CTkLabel(top2, text=tr("Design")).pack(side="left")
+        sm = ctk.CTkOptionMenu(top2, values=list(weapons.SKINS), width=100, command=pick_skin)
+        sm.pack(side="left", padx=(6, 12))
+        ctk.CTkLabel(top2, text=tr("Crosshair")).pack(side="left")
+        cm = ctk.CTkOptionMenu(top2, values=weapons.CROSSHAIRS, width=80, command=pick_cross)
+        cm.pack(side="left", padx=(6, 12))
+        ctk.CTkLabel(top2, text=tr("Hit marks")).pack(side="left")
+        mkm = ctk.CTkOptionMenu(top2, values=weapons.MARKERS, width=80, command=pick_marker)
+        mkm.pack(side="left", padx=(6, 12))
+        ctk.CTkButton(top2, text="↻ " + tr("Replay"), width=90, fg_color=_HOVER, text_color=_TEXT,
+                      command=lambda: None if canvas.replay() else self._say(tr("Play a round first."), False)).pack(side="left")
+        wdesc = ctk.CTkLabel(tab, text="", anchor="w", text_color=("gray40", "gray60"))
+        wdesc.pack(fill="x", before=holder, pady=(0, 2))
+        # gespeicherte Auswahl wiederherstellen
+        wm.set(weapons.weapon(prefs.get("weapon", "")).get("name"))
+        sm.set(prefs.get("skin") if prefs.get("skin") in weapons.SKINS else "Classic")
+        cm.set(prefs.get("crosshair") if prefs.get("crosshair") in weapons.CROSSHAIRS else "Ring")
+        mkm.set(prefs.get("marker") if prefs.get("marker") in weapons.MARKERS else "Dot")
+        canvas.set_skin(sm.get())
+        canvas.crosshair, canvas.marker = cm.get(), mkm.get()
+        pick_weapon(wm.get())
+        if canvas.weapon_id == "standard" and not ranked.get():
+            ranked.select()
+        # ---- Verlauf
+        self.stats_label = ctk.CTkLabel(tab, text="", anchor="w", justify="left")
+        self.stats_label.pack(fill="x")
+        self.spark = tk.Canvas(tab, height=46, highlightthickness=0, bg=canvas.sk["bg"])
+        self.spark.pack(fill="x", pady=(2, 0))
+        self._show_stats()
         pick(canvas.pattern_name)
+
+    def _show_stats(self):
+        """Kennzahlen und kleines Liniendiagramm der letzten Runden (lokal gespeichert, höchstens 50)."""
+        hist = self.plugin.cfg().get("recoil_history")
+        s = weapons.stats(hist)
+        if not s["rounds"]:
+            self.stats_label.configure(text=tr("No rounds yet. Your history appears here."))
+            self.spark.delete("all")
+            return
+        trend = f"{s['trend']:+g}" if s["rounds"] > 5 else "–"
+        self.stats_label.configure(text=tr("Rounds: {n}   Best: {b}   Average: {a}   Trend: {t}   Streak ≥ 75: {s}",
+                                           n=s["rounds"], b=s["best"], a=s["average"], t=trend, s=s["streak"]))
+        self.spark.delete("all")
+        w = max(self.spark.winfo_width(), 300)
+        pts = weapons.sparkline(hist, w, 46)
+        if len(pts) > 1:
+            self.spark.create_line(*[c for p in pts for c in p], fill=self.canvas.sk["target"], width=2)
+
+    def _trainer3d(self, tab):
+        from . import trainer3d
+        top = ctk.CTkFrame(tab, fg_color="transparent")
+        top.pack(fill="x", pady=(0, 6))
+        holder = ctk.CTkFrame(tab, fg_color="transparent")
+        holder.pack(fill="both", expand=True)
+        self.result3d = ctk.CTkLabel(tab, text="", anchor="w", justify="left")
+        self.result3d.pack(fill="x", pady=(6, 0))
+        try:
+            from .trainer3d_view import Trainer3DCanvas
+            canvas = Trainer3DCanvas(holder, on_result=self._trainer3d_result)
+            canvas.pack(fill="both", expand=True)
+        except Exception as exc:
+            ctk.CTkLabel(holder, text=f"3D-Übungsfeld konnte nicht geladen werden: {exc}", text_color=_BAD).pack()
+            return
+        self.canvas3d = canvas
+
+        def pattern(v):
+            canvas.pattern_name = v
+            self._show_best3d()
+
+        def dist(v):
+            canvas.dist_name = v
+            canvas.redraw()
+            self._show_best3d()
+
+        def mode(v):
+            canvas.mode = v
+            canvas.redraw()
+            self._show_best3d()
+
+        ctk.CTkLabel(top, text="Muster").pack(side="left")
+        pm = ctk.CTkOptionMenu(top, values=list(trainer.PATTERNS), width=150, command=pattern)
+        pm.set(canvas.pattern_name)
+        pm.pack(side="left", padx=(6, 10))
+        ctk.CTkLabel(top, text="Entfernung").pack(side="left")
+        dm = ctk.CTkOptionMenu(top, values=list(trainer3d.DISTANCES), width=130, command=dist)
+        dm.set(canvas.dist_name)
+        dm.pack(side="left", padx=(6, 10))
+        ctk.CTkLabel(top, text="Ziel").pack(side="left")
+        mm = ctk.CTkOptionMenu(top, values=list(trainer3d.TARGET_MODES), width=130, command=mode)
+        mm.set(canvas.mode)
+        mm.pack(side="left", padx=(6, 10))
+
+        def strength(v):
+            canvas.strength = round(float(v), 2)
+
+        def rate(v):
+            canvas.rate = int(round(float(v)))
+
+        top2 = ctk.CTkFrame(tab, fg_color="transparent")
+        top2.pack(fill="x", pady=(0, 4), before=holder)
+        ctk.CTkLabel(top2, text="Stärke").pack(side="left")
+        st = ctk.CTkSlider(top2, from_=0.5, to=2.0, width=110, command=strength)
+        st.set(1.0)
+        st.pack(side="left", padx=(6, 14))
+        ctk.CTkLabel(top2, text="Schuss/s").pack(side="left")
+        rt = ctk.CTkSlider(top2, from_=5, to=15, number_of_steps=10, width=110, command=rate)
+        rt.set(10)
+        rt.pack(side="left", padx=(6, 14))
+
+        def pick_weapon3d(name):
+            wid = weapons.weapon_id(name)
+            canvas.weapon_id = wid
+            w = weapons.weapon(wid)
+            canvas.strength, canvas.rate = float(w["strength"]), int(w["rate"])
+            st.set(min(2.0, max(0.5, canvas.strength)))
+            rt.set(min(15, max(5, canvas.rate)))
+
+        def pick_skin3d(name):
+            canvas.set_skin(name)
+
+        ctk.CTkLabel(top2, text=tr("Weapon")).pack(side="left")
+        w3 = ctk.CTkOptionMenu(top2, values=weapons.weapon_names(), width=120, command=pick_weapon3d)
+        w3.set(weapons.weapon(canvas.weapon_id)["name"])
+        w3.pack(side="left", padx=(6, 10))
+        ctk.CTkLabel(top2, text=tr("Design")).pack(side="left")
+        s3 = ctk.CTkOptionMenu(top2, values=list(weapons.SKINS), width=90, command=pick_skin3d)
+        s3.set(canvas.skin_name)
+        s3.pack(side="left", padx=(6, 10))
+        view_btn = ctk.CTkButton(top2, text="3D-Ansicht", width=120)
+
+        def toggle():
+            if canvas.view == "play":
+                canvas.set_view("orbit")
+                view_btn.configure(text="Zurück zum Üben")
+            else:
+                canvas.set_view("play")
+                view_btn.configure(text="3D-Ansicht")
+        view_btn.configure(command=toggle)
+        view_btn.pack(side="left")
+        top.pack_configure(before=top2)
+        self._show_best3d()
+
+    def _best3d_key(self):
+        c = self.canvas3d
+        return f"{c.pattern_name}|{c.dist_name}|{c.mode}" + ("" if c.weapon_id == "standard" else "|" + c.weapon_id)
+
+    def _best3d(self) -> dict:
+        b = self.plugin.cfg().get("recoil3d_best")
+        return dict(b) if isinstance(b, dict) else {}
+
+    def _show_best3d(self, extra=""):
+        if getattr(self, "canvas3d", None) is None:
+            return
+        best = self._best3d().get(self._best3d_key())
+        name = self._best3d_key().replace("|", ", ")
+        text = f"Bestwert ({name}): {best} Punkte" if best is not None else f"Noch kein Bestwert für {name}."
+        self.result3d.configure(text=(extra + "\n" if extra else "") + text)
+
+    def _trainer3d_result(self, res):
+        key = f"{res['pattern']}|{res['distance']}|{res['mode']}" + ("" if res.get("weapon", "standard") == "standard" else "|" + res["weapon"])
+        best = self._best3d()
+        new = res["score"] > best.get(key, -1)
+        if new and res["shots"] >= 10:
+            best[key] = res["score"]
+            self.plugin.set_cfg(recoil3d_best=best)
+        line = (f"{res['score']} Punkte – {res['hits']} von {res['shots']} Schüssen trafen die Scheibe ({res['accuracy']} %), "
+                f"im Schnitt {res['avg']} Scheibenradien daneben.")
+        if new and res["shots"] >= 10:
+            line += "  Neuer Bestwert! 🏆"
+        elif res["shots"] < 10:
+            line += "  (Bestwerte zählen ab 10 Schüssen.)"
+        self._show_best3d(line)
+
+    def _best_key(self, pattern=None, weapon=None) -> str:
+        """Bestwert je Muster; für andere Waffen als Standard je „Muster|Waffe“, damit sich die Werte nicht vermischen."""
+        c = getattr(self, "canvas", None)
+        pattern = pattern or getattr(c, "pattern_name", "")
+        weapon = weapon or getattr(c, "weapon_id", "standard")
+        return pattern if weapon == "standard" else f"{pattern}|{weapon}"
 
     def _best(self) -> dict:
         b = self.plugin.cfg().get("recoil_best")
         return dict(b) if isinstance(b, dict) else {}
 
     def _show_best(self, extra=""):
-        name = getattr(getattr(self, "canvas", None), "pattern_name", "")
+        name = self._best_key()
         best = self._best().get(name)
         text = f"Bestwert „{name}“: {best} Punkte" if best is not None else f"Noch kein Bestwert für „{name}“."
         self.result.configure(text=(extra + "\n" if extra else "") + text)
 
     def _trainer_result(self, res):
         best = self._best()
-        new = res["score"] > best.get(res["pattern"], -1)
+        key = self._best_key(res["pattern"], res.get("weapon"))
+        new = res["score"] > best.get(key, -1)
         if new and res["shots"] >= 10:
-            best[res["pattern"]] = res["score"]
+            best[key] = res["score"]
             self.plugin.set_cfg(recoil_best=best)
+        self.plugin.set_cfg(recoil_history=weapons.add_history(
+            self.plugin.cfg().get("recoil_history"), {"score": res["score"], "avg": res["avg"], "shots": res["shots"],
+                                                       "weapon": res.get("weapon", "standard"), "pattern": res["pattern"]}))
+        self._show_stats()
         self._submit_board(res)
         line = (f"{res['score']} Punkte ({res['shots']} Schüsse) – Abstand zum Ziel im Schnitt {res['avg']} px, "
                 f"ohne Ausgleich wären es {res['without']} px gewesen.")
@@ -255,6 +499,8 @@ class CheatMenuPage(ctk.CTkFrame):
             line += "  Neuer Bestwert! 🏆"
         elif res["shots"] < 10:
             line += "  (Bestwerte zählen ab 10 Schüssen.)"
+        if res.get("hint"):
+            line += "\n" + tr(res["hint"])
         self._show_best(line)
 
     def _submit_board(self, res):
@@ -262,9 +508,11 @@ class CheatMenuPage(ctk.CTkFrame):
         canvas = getattr(self, "canvas", None)
         if canvas is None:
             return
-        kind = trainer.board_kind(res["pattern"], res["shots"], canvas.strength, canvas.rate, canvas.show_guide)
+        kind = trainer.board_kind(res["pattern"], res["shots"], canvas.strength, canvas.rate, canvas.show_guide, res.get("weapon", "standard"))
         if not kind:
-            if res["shots"] < trainer.SHOTS:
+            if res.get("weapon", "standard") != "standard":
+                why = tr("Not counted for the leaderboard: only the Standard weapon counts.")
+            elif res["shots"] < trainer.SHOTS:
                 why = "Nicht für die Bestenliste gezählt: Die Runde wurde vor dem letzten Schuss beendet (alle 30 Schüsse nötig)."
             else:
                 why = "Nicht für die Bestenliste gezählt: Dafür den Haken „Bestenliste“ setzen (feste Standardwerte, keine Hilfslinie)."

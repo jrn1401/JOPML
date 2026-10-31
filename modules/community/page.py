@@ -77,7 +77,14 @@ class CommunityPage(ctk.CTkFrame):
             self.status.configure(text=text, text_color=theme.OK if ok else theme.DANGER)
 
     def say_error(self, text: str):
-        self.say(text, False)
+        """Fehler in der Community: mit Fehlercode anzeigen und (anonym, zusammengefasst) melden – z. B. wenn ein Modul-Upload scheitert."""
+        from core import errors
+        code = errors.classify(text, "E-NET-002")
+        try:
+            self.app.record_error(code, text, "community")
+        except Exception:
+            pass
+        self.say(errors.tag(text, code), False)
 
     def _fresh(self) -> ctk.CTkFrame:
         if self.body is not None:

@@ -13,6 +13,7 @@ Befehle (eine pro Zeile, Groß-/Kleinschreibung egal, '#' beginnt einen Kommenta
   repeat N | repeat forever   ...   end  Wiederholen (bis zu 3 Ebenen; 'forever' nur ganz außen)
   set NAME N / add NAME N                Variable setzen / um N erhöhen (Name: Buchstaben, Ziffern, _; höchstens 12 Variablen)
   if NAME OP N ... [else ...] end        Bedingung (OP: == != < > <= >=); zählt mit den Schleifen zur Verschachtelungstiefe
+  if color X Y == #RRGGBB [tol N] ... [else ...] end   Bedingung nach der Pixelfarbe am Bildschirmpunkt X Y (auch !=; tol = erlaubte Abweichung je Farbkanal, Standard 20)
   stop                                   Makro an dieser Stelle beenden
   In type "Text" wird {NAME} durch den Wert der Variablen ersetzt.
 """
@@ -88,6 +89,19 @@ def _int(tok: str, line: int, lo=-MAX_COORD, hi=MAX_COORD) -> int:
     return v
 
 
+COLOR_TOL = 20
+_COLOR_LINE = re.compile(r"^\s*if\s+color\b", re.I)
+_HEX = re.compile(r"^(?:0x|#)?([0-9a-fA-F]{6})$")
+
+
+def _rgb(tok: str, line: int) -> tuple:
+    m = _HEX.match(tok)
+    if not m:
+        raise MacroError(line, tr("Colour expected as #RRGGBB, found: {t}", t=tok))
+    v = int(m.group(1), 16)
+    return (v >> 16) & 255, (v >> 8) & 255, v & 255
+
+
 def parse(text: str) -> list[Cmd]:
     raw = text.replace("\r\n", "\n").split("\n")
     if len(raw) > MAX_LINES:
@@ -106,6 +120,8 @@ def parse(text: str) -> list[Cmd]:
         return n
 
     for no, orig in enumerate(raw, start=1):
+        if _COLOR_LINE.match(orig):                        # '#RRGGBB' ist hier keine Kommentar-Raute
+            orig = re.sub(r"#([0-9a-fA-F]{6})\b", r"0x\1", orig)
         line = orig.split("#", 1)[0].strip() if '"' not in orig else _strip_comment(orig)
         if not line:
             continue
@@ -129,6 +145,15 @@ def parse(text: str) -> list[Cmd]:
             if len(rest) != 2:
                 raise MacroError(no, tr("Usage: {op} NAME N", op=op))
             cur.append(Cmd(op, (var(rest[0], no), _int(rest[1], no, -1_000_000, 1_000_000)), no))
+        elif op == "if" and rest and rest[0].lower() == "color":
+            if len(rest) not in (5, 7) or rest[3] not in ("==", "!=") or (len(rest) == 7 and rest[5].lower() not in ("tol", "tolerance")):
+                raise MacroError(no, tr("Usage: if color X Y == #RRGGBB [tol N]  (also !=)"))
+            if len(stack) > MAX_DEPTH:
+                raise MacroError(no, tr("Loops may be nested at most {n} levels deep.", n=MAX_DEPTH))
+            tol = _int(rest[6], no, 0, 255) if len(rest) == 7 else COLOR_TOL
+            c = Cmd("if", ("@color", rest[3], (_int(rest[1], no, 0, MAX_COORD), _int(rest[2], no, 0, MAX_COORD), _rgb(rest[4], no), tol)), no)
+            cur.append(c)
+            stack.append((c, c.body))
         elif op == "if":
             if len(rest) != 3 or rest[1] not in OPS:
                 raise MacroError(no, tr("Usage: if NAME == N  (also != < > <= >=)"))
@@ -283,6 +308,9 @@ class Runner:
         self.stop_event = threading.Event()
         self.steps = 0
         self._sleep = sleep or self._wait
+        self.trace = None             # Fehlersuche: Funktion(zeile, schleifen {zeile: (lauf, von)}, variablen) vor jedem Befehl
+        self.step_delay = 0.0         # Fehlersuche: Pause in Sekunden vor jedem Befehl
+        self.loops: dict = {}
 
     def _wait(self, sec: float) -> None:
         self.stop_event.wait(sec)       # lässt sich sofort abbrechen
@@ -296,6 +324,7 @@ class Runner:
         self.steps = 0
         self._down = set()
         self._halt = False
+        self.loops = {}
         self.vars: dict[str, int] = {}
         try:
             self._block(cmds)
@@ -308,19 +337,47 @@ class Runner:
             self._down.clear()
         return "stopped" if self.stop_event.is_set() else "done"
 
+    def _pixel(self, x, y, expect):
+        """Farbe des Bildschirmpunkts (r, g, b) oder None, wenn sie nicht gelesen werden kann."""
+        fn = getattr(self.backend, "pixel", None)
+        if fn is None:
+            return None
+        try:
+            return fn(x, y, expect)
+        except Exception:
+            return None
+
     def _block(self, cmds):
         for c in cmds:
             if self.stop_event.is_set() or self._halt:
                 return
             op, a = c.op, c.args
+            if self.trace is not None:
+                try:
+                    self.trace(c.line, dict(self.loops), dict(self.vars))
+                except Exception:
+                    pass
+                if self.step_delay and op not in ("repeat", "if"):
+                    self._sleep(self.step_delay)
+                    if self.stop_event.is_set():
+                        return
             if op == "repeat":
                 n = 0
                 while (a[0] == 0 or n < a[0]) and not self.stop_event.is_set() and not self._halt:
+                    self.loops[c.line] = (n + 1, a[0])
                     self._block(c.body)
                     n += 1
+                self.loops.pop(c.line, None)
                 continue
             if op == "if":
-                self._block(c.body if OPS[a[1]](self.vars.get(a[0], 0), a[2]) else c.orelse)
+                if a[0] == "@color":
+                    x, y, rgb, tol = a[2]
+                    pix = self._pixel(x, y, rgb)
+                    same = pix is not None and all(abs(p - q) <= tol for p, q in zip(pix, rgb))
+                    cond = same if a[1] == "==" else not same
+                else:
+                    cond = OPS[a[1]](self.vars.get(a[0], 0), a[2])
+                self._block(c.body if cond else c.orelse)
                 continue
             if op == "set":
                 self.vars[a[0]] = a[1]
@@ -400,6 +457,11 @@ class PynputBackend:
 
     def scroll(self, n):
         self.ms.scroll(0, n)
+
+    def pixel(self, x, y, expect=None):
+        from PIL import ImageGrab
+        img = ImageGrab.grab(bbox=(int(x), int(y), int(x) + 1, int(y) + 1), all_screens=True)
+        return tuple(img.convert("RGB").getpixel((0, 0)))
 
 
 # ---------------------------------------------------------------- Offline-Generator (Deutsch/Englisch)
@@ -542,6 +604,10 @@ class _LogBackend:
     def scroll(self, n):
         self._add(f"scroll {n}")
 
+    def pixel(self, x, y, expect=None):
+        self._add(f"check colour at {x},{y} (assumed to match in the preview)")
+        return expect
+
 
 def dry_run(cmds: list[Cmd], limit: int = 120) -> tuple[list[str], bool]:
     """Spielt das Makro ohne Wartezeiten und ohne Eingaben durch. Gibt (Zeilen, abgeschnitten) zurück; Endlosschleifen enden nach `limit` Zeilen."""
@@ -551,3 +617,63 @@ def dry_run(cmds: list[Cmd], limit: int = 120) -> tuple[list[str], bool]:
     ref[0] = runner
     runner.run(cmds)
     return be.log, len(be.log) >= limit
+
+
+# ---------------------------------------------------------------- Erklärung in Worten (offline)
+def _dur_text(sec: float) -> str:
+    if sec >= 60 and sec % 60 == 0:
+        return tr("{n} min", n=f"{sec / 60:g}")
+    if sec >= 1:
+        return tr("{n} s", n=f"{sec:g}")
+    return tr("{n} ms", n=f"{sec * 1000:g}")
+
+
+def describe(cmds: list[Cmd], depth: int = 0) -> list[str]:
+    """Beschreibt ein geprüftes Makro in Sätzen (eine Zeile je Befehl, eingerückt)."""
+    pad = "    " * depth
+    out: list[str] = []
+    for c in cmds:
+        a, op = c.args, c.op
+        if op in ("click", "doubleclick"):
+            what = tr("Double-click") if op == "doubleclick" else tr("Click")
+            where = tr("at {x}, {y}", x=a[1][0], y=a[1][1]) if a[1] else tr("where the mouse is")
+            out.append(pad + tr("{what} with the {b} mouse button {where}", what=what, b=tr(a[0]), where=where))
+        elif op == "move":
+            out.append(pad + tr("Move the mouse to {x}, {y}", x=a[0], y=a[1]))
+        elif op == "key":
+            out.append(pad + tr("Press the key {k}", k=a[0]))
+        elif op == "hold":
+            out.append(pad + tr("Hold {k} for {d}", k=a[0], d=_dur_text(a[1])))
+        elif op == "down":
+            out.append(pad + tr("Keep {k} pressed", k=a[0]))
+        elif op == "up":
+            out.append(pad + tr("Release {k}", k=a[0]))
+        elif op == "type":
+            out.append(pad + tr('Type the text "{t}"', t=a[0]))
+        elif op == "scroll":
+            out.append(pad + (tr("Scroll up by {n}", n=a[0]) if a[0] >= 0 else tr("Scroll down by {n}", n=-a[0])))
+        elif op == "wait":
+            out.append(pad + (tr("Wait a random time between {a} and {b}", a=_dur_text(a[0]), b=_dur_text(a[1])) if len(a) > 1 else tr("Wait {d}", d=_dur_text(a[0]))))
+        elif op == "set":
+            out.append(pad + tr("Set {v} to {n}", v=a[0], n=a[1]))
+        elif op == "add":
+            out.append(pad + tr("Add {n} to {v}", v=a[0], n=a[1]))
+        elif op == "stop":
+            out.append(pad + tr("End the macro"))
+        elif op == "repeat":
+            out.append(pad + (tr("Repeat forever:") if a[0] == 0 else tr("Repeat {n} times:", n=a[0])))
+            out += describe(c.body, depth + 1)
+        elif op == "if":
+            if a[0] == "@color":
+                x, y, rgb, tol = a[2]
+                col = "#%02X%02X%02X" % rgb
+                key = "If the colour at {x}, {y} is {c} (tolerance {t}):" if a[1] == "==" else "If the colour at {x}, {y} is NOT {c} (tolerance {t}):"
+                out.append(pad + tr(key, x=x, y=y, c=col, t=tol))
+            else:
+                words = {"==": "equals", "!=": "is not", "<": "is less than", ">": "is greater than", "<=": "is at most", ">=": "is at least"}
+                out.append(pad + tr("If {v} {op} {n}:", v=a[0], op=tr(words[a[1]]), n=a[2]))
+            out += describe(c.body, depth + 1)
+            if c.orelse:
+                out.append(pad + tr("Otherwise:"))
+                out += describe(c.orelse, depth + 1)
+    return out

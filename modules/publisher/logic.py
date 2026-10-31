@@ -96,6 +96,30 @@ def release_entries(objects, manifest) -> list[dict]:
     return out
 
 
+ARENA_RE = re.compile(r"^jopml-arena-(\d+(?:\.\d+){1,3})\.zip$")
+
+
+def arena_entries(objects, manifest) -> list[dict]:
+    """Alle hochgeladenen Arena-ZIPs (neueste zuerst); aktiv ist die, auf die arena.json zeigt."""
+    from urllib.parse import unquote
+    url = unquote(str((manifest or {}).get("url", "")))
+    out = []
+    for o in objects or []:
+        name = str(o.get("name", ""))
+        m = ARENA_RE.match(name)
+        if not m:
+            continue
+        meta = o.get("metadata") or {}
+        out.append({"name": name, "platform": "arena", "version": m.group(1), "size": int(meta.get("size") or 0),
+                    "date": str(o.get("created_at") or o.get("updated_at") or "")[:10], "active": bool(url) and url.endswith("/" + name)})
+    out.sort(key=lambda e: tuple(-x for x in parse_version(e["version"])))
+    return out
+
+
+def arena_manifest(version: str, url: str, sha256: str, size: int = 0) -> dict:
+    return {"version": check_version(version), "url": url, "sha256": sha256, "size": size}
+
+
 def activate_manifest(current: dict | None, platform: str, version: str, url: str, sha256: str, notes: str = "") -> dict:
     """Stellt für eine Plattform eine bereits hochgeladene Version als aktuelle ein (auch eine ältere = Zurückstellen).
     Ist sie älter als die bisherige, bekommt das Paket "rollback": true, damit Apps mit der neueren (fehlerhaften) Version

@@ -157,8 +157,14 @@ jobs:
             echo "Release $TAG existiert schon. Bitte APP_VERSION in core/version.py erhöhen."
             exit 0
           fi
-          gh release create "$TAG" dist/JaronsOPMakro.exe dist/JaronsOPMakro-Setup.exe dist/version.json \
-            --target "${GITHUB_SHA}" --title "Version ${{ needs.build-windows.outputs.version }}" --notes-file RELEASE_NOTES.txt
+          VER="${{ needs.build-windows.outputs.version }}"
+          EXTRA=()
+          # Neueste Arena-Version (eigenständiges Paket) und die Änderungsdatei dieses Updates gehören mit ins Release
+          ARENA=$(ls arena_release/jopml-arena-*.zip 2>/dev/null | sort -V | tail -n 1)
+          [ -n "$ARENA" ] && EXTRA+=("$ARENA")
+          [ -f "release_notes/UPDATE_${VER}.md" ] && EXTRA+=("release_notes/UPDATE_${VER}.md")
+          gh release create "$TAG" dist/JaronsOPMakro.exe dist/JaronsOPMakro-Setup.exe dist/version.json "${EXTRA[@]}" \
+            --target "${GITHUB_SHA}" --title "Version ${VER}" --notes-file RELEASE_NOTES.txt
       - name: Spiegel im Supabase-Bucket "releases" (nur wenn Secrets gesetzt sind)
         if: steps.changed.outputs.yes == 'true'
         env:

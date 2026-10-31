@@ -168,7 +168,7 @@ def apply(settings: dict) -> None:
 ICON_COLORS = {
     "dashboard": "#4aa3ff", "autoclicker": "#ff6b6b", "gamemacros": "#a66bff", "macros": "#4cd1a0",
     "productivity": "#ffd23f", "clicktools": "#ff9f43", "gamer": "#6bff8e", "community": "#5ac8fa",
-    "extensions": "#c58bff", "publisher": "#ff7ab8", "admin": "#ff5d5d", "cheatmenu": "#ff8a5c", "luascripts": "#6ec1ff",
+    "extensions": "#c58bff", "publisher": "#ff7ab8", "admin": "#ff5d5d", "cheatmenu": "#ff8a5c", "luascripts": "#6ec1ff", "modmanager": "#7be0a8", "arena": "#f87171",
     "assistant": "#7ad7ff", "contact": "#ffc857", "settings": "#b0b8c4",
 }
 

@@ -340,6 +340,9 @@ class GamerPage(HubPage):
                 live.after(1000, tick)
         tick()
         self._overlay_switch(body, plugin, "net", "Show the network overlay")
+        ui.muted(body, "The graph shows the ping of the last 60 seconds as a line; red bars are lost packets. "
+                       "It shows the network only: the frame rate of a game cannot be measured without intervening in the game.").pack(fill="x", pady=(8, 0))
+        self._overlay_switch(body, plugin, "netgraph", "Show the ping graph")
         self._design_card(area, plugin.net_overlay, plugin, 1, colour_label="Text colour")
 
     # ---------------------------------------------------------------- Overlay-Aussehen

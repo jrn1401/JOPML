@@ -239,11 +239,17 @@ class Notes:
 class PingHistory:
     """Letzte Messungen: Ping (Mittel) und Paketverlust in Prozent."""
 
-    def __init__(self, size: int = 20):
+    def __init__(self, size: int = 20, graph_size: int = 30):
         self.values: deque = deque(maxlen=size)         # None = verloren
+        self.series: deque = deque(maxlen=graph_size)   # Verlauf für den Graphen (30 Messungen à 2 s = 60 s)
 
     def add(self, ms: float | None) -> None:
         self.values.append(ms)
+        self.series.append(ms)
+
+    def clear(self) -> None:
+        self.values.clear()
+        self.series.clear()
 
     def loss_pct(self) -> int:
         n = len(self.values)
@@ -272,3 +278,29 @@ def split_host(text: str) -> tuple[str, int]:
     except ValueError:
         port_n = 443
     return host or "1.1.1.1", max(1, min(65535, port_n))
+
+
+def graph_points(values, width: int, height: int, vmax: float | None = None, pad: int = 4) -> tuple[list, list]:
+    """Wandelt Messwerte in Linienpunkte (x, y) um. Verlorene Pakete (None) unterbrechen die Linie.
+    Gibt (Liniensegmente, Verlustmarken-x) zurück; Segment = Liste von (x, y). Größere Werte liegen weiter oben."""
+    vals = list(values)
+    ok = [v for v in vals if v is not None]
+    if not vals:
+        return [], []
+    top = float(vmax) if vmax else max(50.0, max(ok) * 1.2 if ok else 50.0)
+    n = len(vals)
+    step = (width - 2 * pad) / max(1, n - 1)
+    segs, cur, lost = [], [], []
+    for i, v in enumerate(vals):
+        x = pad + i * step
+        if v is None:
+            lost.append(x)
+            if len(cur) > 0:
+                segs.append(cur)
+            cur = []
+            continue
+        y = height - pad - (min(float(v), top) / top) * (height - 2 * pad)
+        cur.append((round(x, 1), round(y, 1)))
+    if cur:
+        segs.append(cur)
+    return segs, lost

@@ -1,4 +1,4 @@
 # Module, die fest in die gebaute EXE eingepackt werden.
 # Im Quellcode-Betrieb werden zusätzlich alle Unterordner automatisch gefunden.
 # Beim Hinzufügen eines neuen Moduls den Ordnernamen hier eintragen, damit es auch in der EXE erscheint.
-BUILTIN_MODULES = ["autoclicker", "macros", "clicktools", "gamemacros", "gamer", "productivity", "extensions", "cheatmenu", "luascripts", "community", "publisher", "admin"]
+BUILTIN_MODULES = ["autoclicker", "macros", "clicktools", "gamemacros", "gamer", "productivity", "extensions", "cheatmenu", "arena", "aichat", "luascripts", "modmanager", "community", "publisher", "admin"]

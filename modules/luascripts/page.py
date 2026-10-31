@@ -87,7 +87,7 @@ class LuaPage(ctk.CTkFrame):
         if not path:
             return
         try:
-            text = module_import.read_lua(path)
+            text = module_import.read_lua_file(path)
             name = module_import.clean_name(path)
             replace = False
             if name in module_import.lua_scripts():

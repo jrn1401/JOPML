@@ -1,6 +1,6 @@
 """Modul "Lua scripts": eigene Lua-Skripte in einer Sandbox ausführen (Bibliothek lupa).
 
-Skripte liegen als <name>.lua im Datenordner (lua_scripts). Hinzufügen: auf dieser Seite oder Einstellungen > Module importieren.
+Skripte liegen als <name>.lua im Datenordner (lua_scripts). Hinzufügen: auf dieser Seite oder im Menüpunkt Modules.
 Ein Skript darf rechnen, print(...), wait(ms) und macro("...") benutzen (Makro-Sprache des Launchers).
 Notaus (Strg+Umschalt+F12) und der Stopp-Knopf beenden es.
 """

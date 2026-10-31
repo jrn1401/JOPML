@@ -7,6 +7,8 @@ from pathlib import Path
 from core.version import APP_ID
 
 DEFAULT_SETTINGS = {
+    "auto_backup_days": 0,         # 0 = aus, sonst alle N Tage eine Sicherung im Ordner "backups"
+    "auto_backup_last": "",        # Datum (JJJJ-MM-TT) der letzten automatischen Sicherung
     "appearance_mode": "dark",     # dark | light | system
     "accent": "#4f8cff",
     "dl_limit_kbps": 0,            # 0 = unbegrenzt
@@ -48,6 +50,9 @@ DEFAULT_SETTINGS = {
     "hotkeys": {},                 # {id: {"key": "...", "enabled": bool, "window": "Teil des Fenstertitels"}} (siehe core/hotkey_registry.py)
     "hotkey_profiles": {},         # {Name: {id: {...}}} gespeicherte Tastenbelegungen (z. B. je Spiel)
     "macros_hotkey": "<f7>",       # Start/Stopp der Makros
+    "macro_favorites": [],         # Namen gespeicherter Makros, die auf dem Dashboard stehen (1.8.1)
+    "temp_session": False,         # kurze Sitzung nur für einen Neustart (Update/Modulwechsel), wird beim Wiederanmelden entfernt
+    "mini_pos": [],                # letzte Position des Mini-Fensters [x, y]
     "gm_params": {},               # zuletzt benutzte Werte der Spiele-Makros {preset_id: {...}}
 }
 

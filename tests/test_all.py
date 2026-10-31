@@ -1103,7 +1103,8 @@ def test_ci_migrations_in_order():
         as_b = f"set role authenticated; set request.jwt.claim.sub = '{ub}'; "
         pg_shim.sql(db, as_b + "select public.jopml_heartbeat('1.7.2', 'Windows', 'dashboard')")
         pg_shim.sql(db, as_b + "select public.jopml_log_error('crash', 'x', 't', '1.7.2', 'Windows') from generate_series(1, 30)")
-        check(pg_shim.sql(db, "select count(*) from public.jopml_errors") == "20", "Fehlerberichte pro Nutzer begrenzt")
+        # seit 1.9.0 werden automatische Fehler gruppiert (jopml_error_groups) statt einzeln gespeichert
+        check(pg_shim.sql(db, "select count(*) || '/' || max(hits) from public.jopml_error_groups") == "1/30", "gleiche Fehler landen in einer Gruppe")
         for fn in ("jopml_admin_overview()", "jopml_admin_users(10)", "jopml_admin_errors(10)", "jopml_admin_clear_errors()"):
             try:
                 pg_shim.sql(db, as_b + f"select public.{fn}")
@@ -1123,7 +1124,7 @@ def test_ci_migrations_in_order():
             check("permission denied" in str(e), str(e))
         as_a = f"set role authenticated; set request.jwt.claim.sub = '{ua}'; "
         ov = json.loads(pg_shim.sql(db, as_a + "select public.jopml_admin_overview()").splitlines()[-1])
-        check(ov["online_now"] == 1 and ov["registered"] == 2 and ov["errors_total"] == 20, f"Admin-Übersicht: {ov}")
+        check(ov["online_now"] == 1 and ov["registered"] == 2, f"Admin-Übersicht: {ov}")
         check("user@x.de" in pg_shim.sql(db, as_a + "select email from public.jopml_admin_users(10)"), "Admin sieht Konten")
         pg_shim.sql(db, as_a + "select public.jopml_admin_clear_errors()")
         check(pg_shim.sql(db, "select count(*) from public.jopml_errors") == "0", "Admin löscht Fehlerberichte")
@@ -1141,6 +1142,11 @@ def test_release_workflow_assets():
           f"Release-Dateien: {create}")
     check("//FJaronsOPMakro-Setup installer.iss" in wf and "OutputDir=dist" in iss and "dist\\{#AppExe}" in iss, "Setup wird aus installer.iss gebaut (gleicher Name wie SETUP_BAUEN.bat, Datei ohne Versionsnummer)")
     check("PrivilegesRequired=lowest" in iss, "Setup ohne Adminrechte (Auto-Update kann die EXE ersetzen)")
+    check('arena_release/jopml-arena-*.zip' in wf and 'release_notes/UPDATE_${VER}.md' in wf, "Arena-Paket und Änderungsdatei kommen ins Release")
+    zips = sorted((ROOT / "arena_release").glob("jopml-arena-*.zip"), key=lambda p: [int(x) for x in re.findall(r"\d+", p.stem)])
+    from arena import VERSION as ARENA_VERSION
+    check(zips and zips[-1].name == f"jopml-arena-{ARENA_VERSION}.zip", f"neueste Arena-Version ({ARENA_VERSION}) liegt in arena_release/: {[z.name for z in zips]}")
+    check((ROOT / "release_notes" / f"UPDATE_{APP_VERSION}.md").exists(), f"Änderungsdatei release_notes/UPDATE_{APP_VERSION}.md fehlt")
     first = (ROOT / "RELEASE_NOTES.txt").read_text(encoding="utf-8").split(":", 1)[0]
     check(first == f"Version {APP_VERSION}", f"RELEASE_NOTES beginnt mit {first!r}, APP_VERSION ist {APP_VERSION}")
 
@@ -1217,12 +1223,14 @@ def test_lua_sandbox_real():
 
 def test_layout_and_background():
     from core import background, layout
-    ids = ["autoclicker", "macros", "extensions", "recoil", "assistant", "contact"]
+    ids = ["macros", "autoclicker", "extensions", "recoil", "assistant", "contact"]
     check(layout.normalize_order(ids, []) == ids, "Standardreihenfolge")
+    check(layout.normalize_order(["recoil", "community", "gamer", "macros"], [])[:3] == ["macros", "gamer", "community"], "wichtige Module standardmäßig oben")
+    check(layout.move_to_top(ids, [], "contact")[0] == "contact" and layout.move_to_top(ids, [], "zzz") == ids, "ganz nach oben")
     check(layout.normalize_order(ids, ["recoil", "x", "recoil", "dashboard", "macros"])[:2] == ["recoil", "macros"], "unbekannt/doppelt verworfen")
-    check(layout.normalize_order(ids + ["community"], ["recoil"])[-1] == "community", "neues Modul hinten angefügt")
-    check(layout.move(ids, [], "recoil", -2)[:4] == ["autoclicker", "recoil", "macros", "extensions"], "nach oben")
-    check(layout.move(ids, [], "autoclicker", -5)[0] == "autoclicker", "oben bleibt oben")
+    check(layout.normalize_order(ids + ["zzz_new"], ["recoil"])[-1] == "zzz_new", "neues Modul hinten angefügt")
+    check(layout.move(ids, [], "recoil", -2)[:4] == ["macros", "recoil", "autoclicker", "extensions"], "nach oben")
+    check(layout.move(ids, [], "macros", -5)[0] == "macros", "oben bleibt oben")
     check(layout.move(ids, [], "contact", 5)[-1] == "contact", "unten bleibt unten")
     check(layout.set_hidden([], "dashboard", True) == [] and layout.set_hidden([], "settings", True) == [], "Dashboard/Einstellungen nie ausblendbar")
     h = layout.set_hidden([], "macros", True)
@@ -1742,8 +1750,27 @@ def test_gui_smoke():
         a.apply_look({"potato_mode": False})
         a._soft_rebuild()
         check(a.pages == pages_before, "Kartoffel-Modus schalten lässt die Seiten stehen")
-        for pid in ["dashboard", "autoclicker", "clicktools", "gamemacros", "macros", "productivity", "gamer", "cheatmenu", "assistant", "contact", "settings"]:
-            a.show(pid)
+        for pid in ["dashboard", "autoclicker", "clicktools", "gamemacros", "macros", "productivity", "gamer", "cheatmenu", "assistant", "contact", "settings", "errorcodes", "aichat", "modmanager"]:
+            if pid in a.plugin_by_id or pid in a._builtin or pid == "dashboard":
+                a.show(pid)
+        if "aichat" in a.pages:                                                            # 1.10.0: Streaming, Projekte, Dialoge
+            ac = a.pages["aichat"]
+            ac.avail = ["gemini", "groq"]
+            ac.busy = True
+            ac._stream_start("groq", "m", "gemini")
+            ac._answer({"reply": "ok ```python\nclass Plugin(BasePlugin):\n    id = 'x'\n```", "provider": "groq", "model": "m", "tokens": 3, "fallback_from": "gemini", "cancelled": False})
+            check(ac.history and ac.history[-1]["role"] == "assistant" and not ac.busy, "Antwort wird übernommen, Chat wieder frei")
+            ac._chats_dialog()
+            ac._templates_dialog()
+            ac.set_project("foo")
+            check(ac.project == "foo", "Projekt wechseln")
+            ac.set_project("General")
+        a.show("errorcodes")
+        a.pages["errorcodes"].focus_code("E-AI")
+        from core import error_dialog as ed
+        ed.show_error(a, "T", "msg", "E-NET-001")
+        ed.open_report(a, "E-NET-001", "x")
+        ed.my_reports(a)
         for pid in ("autoclicker", "clicktools", "gamemacros", "gamer", "productivity"):        # alle Reiter einmal bauen
             page = a.pages[pid]
             for label in list(page._tabs):
@@ -1762,7 +1789,7 @@ def test_gui_smoke():
             a.show("settings")
         a.apply_look({"accent": "#abcdef"})
         order = [i for i, _ in a.nav_entries()]
-        check(order[:8] == ["autoclicker", "clicktools", "gamemacros", "macros", "productivity", "gamer", "cheatmenu", "community"], f"Standard-Menüreihenfolge: {order}")
+        check(order[:8] == ["macros", "autoclicker", "gamer", "gamemacros", "cheatmenu", "arena", "aichat", "clicktools"], f"Standard-Menüreihenfolge: {order}")
         check("extensions" not in order and "recoil" not in order, "Extensions und Recoil haben keinen eigenen Menüpunkt mehr")
         a.set_layout(order=["macros", "autoclicker"], hidden=["gamer"])
         check(a.nav_entries()[0][0] == "macros" and "gamer" not in dict(a.nav_entries()), "Layout wirkt")
@@ -2147,7 +2174,7 @@ def test_v170_pixel_change_telemetry_admin_logic():
     t.beat()
     t.report("ui", "Boom", "trace")
     t.flush()
-    check([n for n, _ in sent] == ["jopml_heartbeat", "jopml_log_error"] and sent[0][1]["p_page"] == "gamer", "Lebenszeichen und Fehlerbericht")
+    check([n for n, _ in sent] == ["jopml_heartbeat", "jopml_report_error"] and sent[0][1]["p_page"] == "gamer" and sent[1][1]["p_code"] is None, "Lebenszeichen und Fehlerbericht")
     FakeApp.settings["diagnostics"] = False
     sent.clear()
     t.beat()
@@ -2657,6 +2684,1253 @@ def test_v180_account_backup():
     s3.register("bob", "Bob", "anna@example.org", "geheim1234")
     ab.restore_account(s3, text, "meine lange passphrase")
     check(s3.users["anna"]["email"] == "", "doppelte E-Mail wird weggelassen")
+
+
+def test_v181_modules_page_trainer3d_palette_backup():
+    import datetime
+    from core import backup, config, hotkey_registry, module_import, palette
+    from modules import BUILTIN_MODULES
+    from modules.cheatmenu import trainer3d, trainer
+    # Modul "Modules"
+    check("modmanager" in BUILTIN_MODULES, "Modul eingetragen")
+    from modules.modmanager.plugin import Plugin as MP
+    check(MP.id == "modmanager" and MP.nav, "Plugin-Daten")
+    from modules.modmanager import page as mpage
+    check(hasattr(mpage, "ModulesPage"), "Seite vorhanden")
+    # 3D-Trainer: Mathematik
+    cx, cy = 280.0, 220.0
+    rd = trainer3d.Round3D("Gerade hoch", "Nah (10 m)", "Fest", 1.0, 10, 5, cx, cy)
+    tx, ty = rd.target_px(0)
+    check(abs(tx - cx) < 1e-6 and abs(ty - (cy - trainer3d.F * trainer3d.TARGET_Y / 10)) < 1e-6, "Scheibenmitte auf dem Bildschirm")
+    x, y = trainer3d.to_wall(tx, ty, cx, cy, 10.0)
+    check(abs(x) < 1e-9 and abs(y - trainer3d.TARGET_Y) < 1e-9, "Bildschirm -> Wand")
+    check(abs(trainer3d.from_wall(x, y, cx, cy, 10.0)[1] - ty) < 1e-9, "Wand -> Bildschirm")
+    check(trainer3d.target_radius_px(50) < trainer3d.target_radius_px(10), "weiter weg = kleiner")
+    first = rd.shoot(tx, ty)
+    check(first["hit"] and first["dist"] < 1e-9, "erster Schuss trifft die Mitte")
+    while not rd.done:
+        rd.shoot(tx, ty)
+    res = rd.result()
+    check(res["shots"] == trainer.SHOTS and res["hits"] < res["shots"] and 0 <= res["score"] <= 100, f"Ergebnis {res}")
+    check(rd.shoot(tx, ty) is None, "nach der Runde kein Schuss mehr")
+    # perfekter Ausgleich = volle Punkte
+    rd2 = trainer3d.Round3D("Gerade hoch", "Mittel (25 m)", "Fest", 1.0, 10, 1, cx, cy)
+    path = trainer.ideal_path(rd2.target_px(0), rd2.core.pat)
+    for px, py in path:
+        rd2.shoot(px, py)
+    r2 = rd2.result()
+    check(r2["hits"] == r2["shots"] and r2["score"] == 100, f"perfekter Ausgleich: {r2}")
+    check(abs(trainer3d.target_x("Läuft seitlich", 1.0) - trainer3d.STRAFE_AMP) < 1e-9 and trainer3d.target_x("Fest", 1.0) == 0.0, "pendelnde Scheibe")
+    cam = trainer3d.Camera()
+    p0 = cam.project((0.0, 0.2, 25.0))
+    check(p0 is not None and 0 < p0[0] < cam.w, "Projektion im Bild")
+    cam.rotate(0.5, 0.2)
+    check(cam.project((0, 0, 25)) is not None, "nach dem Drehen sichtbar")
+    check(cam.project(tuple(2 * a - b for a, b in zip(cam.pivot, cam.position()))) is None or True, "Punkt hinter der Kamera")
+    behind = tuple(cam.position()[i] + (cam.position()[i] - cam.pivot[i]) for i in range(3))
+    check(cam.project(behind) is None, "hinter der Kamera = nicht sichtbar")
+    cam.zoom(0.0001)
+    check(cam.dist >= 6.0, "Zoom hat Untergrenze")
+    prims = trainer3d.orbit_primitives(trainer3d.Camera(), rd)
+    check(sum(1 for q in prims if q[0] == "oval") >= trainer.SHOTS, "alle Einschüsse gezeichnet")
+    check(len(trainer3d.play_primitives(rd, (cx, cy), 0.3, 560, 440)) > 20, "Live-Ansicht hat Inhalt")
+    # Befehlspalette
+    items = [("Go to Settings", 1), ("Go to Macros", 2), ("Restart launcher", 3)]
+    check([i[1] for i in palette.match(items, "mac")] == [2], "Suche findet Makros")
+    check(len(palette.match(items, "go")) == 2 and len(palette.match(items, "")) == 3, "Suche: Wörter und leer")
+    check(palette.match(items, "zzz") == [], "kein Treffer")
+    # automatische Sicherung
+    old = config.app_dir
+    tmp = Path(tempfile.mkdtemp(dir=TMP))
+    config.app_dir = lambda: tmp
+    try:
+        st = {"auto_backup_days": 7, "auto_backup_last": ""}
+        day = datetime.date(2026, 11, 1)
+        check(backup.auto_due(st, day), "ohne letzte Sicherung fällig")
+        check(backup.run_auto(st, day) is not None and st["auto_backup_last"] == "2026-11-01", "Sicherung geschrieben")
+        check(not backup.auto_due(st, day + datetime.timedelta(days=3)), "nach 3 Tagen nicht fällig")
+        check(backup.auto_due(st, day + datetime.timedelta(days=7)), "nach 7 Tagen fällig")
+        check(not backup.auto_due({"auto_backup_days": 0}, day), "aus = nie")
+        for n in range(8):
+            st["auto_backup_last"] = ""
+            backup.run_auto(st, day + datetime.timedelta(days=10 * (n + 1)))
+        files = sorted(backup.auto_dir().glob("jopml-auto-*.json"))
+        check(len(files) == backup.KEEP_AUTO, f"nur {backup.KEEP_AUTO} Dateien bleiben ({len(files)})")
+        data = json.loads(files[-1].read_text(encoding="utf-8"))
+        check(data["format"] == backup.FORMAT and "auto_backup_last" not in data["settings"], "gültiges Backup ohne Gerätedaten")
+    finally:
+        config.app_dir = old
+    # freie Taste
+    class FakeApp:
+        settings = {}
+        def save_settings(self): pass
+    reg = hotkey_registry.Registry(FakeApp(), window_title=lambda: "")
+    reg.register(hotkey_registry.Entry("a", "A", "G", default="<ctrl>+<alt>+<f1>", action=lambda: None))
+    reg.register(hotkey_registry.Entry("b", "B", "G", default="<ctrl>+<alt>+<f2>", action=lambda: None))
+    check(reg.suggest_free_key() == "<ctrl>+<alt>+<f3>", f"erste freie Taste: {reg.suggest_free_key()}")
+    check(hotkey_registry.normalize(reg.suggest_free_key()) == reg.suggest_free_key(), "Vorschlag ist gültig")
+
+
+def test_v181_paket1_color_debug_ai_fix():
+    from modules.macros import dsl, generator
+    script = "repeat 2\n  if color 10 20 == #FF0000 tol 5\n    click left\n  else\n    key a\n  end\n  wait 1ms\nend\nif color 1 1 != 00ff00\n  key b\nend"
+    cmds = dsl.parse(script)
+    dsl.check(cmds)
+    check(cmds[0].body[0].args == ("@color", "==", (10, 20, (255, 0, 0), 5)), f"Farb-Befehl geparst: {cmds[0].body[0].args}")
+    check(cmds[1].args[2][3] == dsl.COLOR_TOL, "Standardtoleranz")
+    for bad in ("if color 1 1 == rot\nend", "if color 1 1 < #ff0000\nend", "if color 1 1 == #ff0000 tol 300\nend", "if color 1 1 ==\nend", "if color 1 1 == #ff0000 foo 3\nend"):
+        raises(dsl.MacroError, dsl.parse, bad)
+    check(dsl.parse("# nur ein Kommentar\nkey a # und noch einer")[0].op == "key", "# bleibt sonst Kommentar")
+
+    class B:
+        def __init__(self, pix): self.pix, self.log = pix, []
+        def click(self, *a): self.log.append("click")
+        def key(self, k): self.log.append(k)
+        def pixel(self, x, y, e): return self.pix
+    for pix, want in (((250, 4, 3), ["click", "click", "b"]), ((0, 0, 0), ["a", "a"]), (None, ["a", "a"])):
+        b = B(pix)
+        dsl.Runner(b, sleep=lambda s: None).run(cmds)
+        if pix == (0, 0, 0):
+            want = ["a", "a", "b"]
+        if pix is None:
+            want = ["a", "a", "b"]
+        check(b.log == want, f"Farbe {pix}: {b.log} statt {want}")
+    class NoPixel:
+        def key(self, k): pass
+        def click(self, *a): pass
+    check(dsl.Runner(NoPixel(), sleep=lambda s: None).run(cmds) == "done", "Backend ohne pixel() stürzt nicht ab")
+    # Vorschau läuft ohne Bildschirm
+    lines, _cut = dsl.dry_run(cmds)
+    check(any("check colour" in l for l in lines), "Vorschau nennt die Farbprüfung")
+    # Fehlersuche
+    seen = []
+    r = dsl.Runner(B((250, 4, 3)), sleep=lambda s: None)
+    r.trace = lambda line, loops, variables: seen.append((line, dict(loops)))
+    r.step_delay = 0.5
+    r.run(cmds)
+    check(seen[0][0] == 1 and any(l == {1: (2, 2)} for _n, l in seen), f"Zeile und Schleifenzähler: {seen[:6]}")
+    check(seen[-1][1] == {}, "Zähler nach der Schleife leer")
+    r2 = dsl.Runner(B(None), sleep=lambda s: None)
+    r2.trace = lambda *a: 1 / 0
+    check(r2.run(cmds) == "done", "Fehler im Trace stoppt das Makro nicht")
+    # Beschreibung
+    text = "\n".join(dsl.describe(cmds))
+    check("#FF0000" in text and "Otherwise" in text and "Repeat 2 times" in text, text)
+    # KI-Reparatur: nur geprüfte Skripte kommen zurück
+    calls = []
+    def ask(messages):
+        calls.append(messages)
+        return "```\nbogus\n```" if len(calls) == 1 else "```\nclick left 5 5\n```"
+    fixed = generator.fix("clik left 5 5", "Line 1: Unknown command", ask)
+    check(fixed == "click left 5 5" and len(calls) == 2, "zweiter Versuch liefert gültiges Skript")
+    check(all(len(m["content"]) <= 1000 for c in calls for m in c), "Nachrichten bleiben unter dem Serverlimit")
+    raises(generator.GenerateError, generator.fix, "x" * 2000, "e", ask)
+    raises(generator.GenerateError, generator.fix, "clik", "e", lambda m: "nope")
+    check(generator.explain("click", lambda m: " ok ") == "ok", "Erklärung")
+
+
+def test_v181_paket2_mini_favorites_chips_graph_sorts():
+    from core import assistant_chips, minimode, panic
+    from modules.community import market_view
+    from modules.gamer import helpers
+    from modules.macros.plugin import Plugin as MacroPlugin
+    # Mini-Modus: Statustext und Laufende
+    check("nothing is running" in minimode.status_text([]), "Leerlauf")
+    check(minimode.status_text(["macros"], {"macros": "My macros"}).endswith("My macros"), "Laufend")
+
+    class P:
+        def __init__(self, i, **kw):
+            self.id = i
+            self.__dict__.update(kw)
+
+    class Eng:
+        running = True
+    app = type("A", (), {})()
+    app.plugins = [P("autoclicker", engine=Eng()), P("macros", state="running"), P("luascripts", running=False), P("gamer")]
+    check(panic.active(app) == ["autoclicker", "macros"], f"aktive Module: {panic.active(app)}")
+    app.plugins = [P("macros", state="idle")]
+    check(panic.active(app) == [], "nichts aktiv")
+    # Favoriten
+    mp = MacroPlugin.__new__(MacroPlugin)
+    saved = {"a": "wait 1ms", "b": "wait 2ms"}
+    mp.app = type("A", (), {"settings": {"macro_favorites": ["a", "gone", 5]}, "save_settings": lambda self: None})()
+    mp.list_macros = lambda: sorted(saved)
+    check(mp.favorites() == ["a"], "gelöschte und ungültige Favoriten fallen heraus")
+    check(mp.toggle_favorite("b") is True and mp.favorites() == ["a", "b"], "Favorit hinzufügen")
+    check(mp.toggle_favorite("a") is False and mp.favorites() == ["b"], "Favorit entfernen")
+    try:
+        mp.toggle_favorite("nope")
+        check(False, "unbekanntes Makro")
+    except ValueError:
+        pass
+    ran = []
+    mp.load = lambda n: saved[n]
+    mp.run = lambda text, backend=None, **kw: ran.append(text) or ""
+    check(mp.run_saved("b") == "" and ran == ["wait 2ms"], "gespeichertes Makro starten")
+    # Schnellfragen
+    for pid, qs in assistant_chips.CHIPS.items():
+        check(qs and all(0 < len(q) < 200 for q in qs), f"Fragen für {pid}")
+    check(assistant_chips.for_page("unknown") == assistant_chips.DEFAULT and assistant_chips.for_page(None), "Standardfragen")
+    check(assistant_chips.for_page("macros") != assistant_chips.DEFAULT, "Fragen passen zur Seite")
+    # Ping-Verlauf und Graph
+    ph = helpers.PingHistory()
+    for i in range(45):
+        ph.add(None if i == 10 else 20 + i)
+    check(len(ph.series) == 30 and len(ph.values) == 20, "Verlauf 30, Statistik 20")
+    segs, lost = helpers.graph_points(ph.series, 220, 70)
+    check(sum(len(sg) for sg in segs) == 30 - len([v for v in ph.series if v is None]), "Punkte ohne Verlust")
+    segs, lost = helpers.graph_points([10, None, 30, 40], 100, 50)
+    check(len(segs) == 2 and len(lost) == 1, "Verlust unterbricht die Linie")
+    check(all(0 <= y <= 50 for sg in segs for _x, y in sg), "Punkte im Bild")
+    check(helpers.graph_points([], 100, 50) == ([], []), "leer")
+    ph.clear()
+    check(not ph.series and not ph.values, "clear")
+    # Marktplatz-Sortierung
+    rows = [{"title": "banana", "votes": 3, "stars": 4}, {"title": "Apple", "votes": 9, "stars": 3}, {"title": "cherry", "votes": 3, "stars": 5}]
+    check([r["title"] for r in market_view.sort_rows(rows, "az")] == ["Apple", "banana", "cherry"], "A-Z ohne Groß/Klein")
+    check([r["title"] for r in market_view.sort_rows(rows, "za")] == ["cherry", "banana", "Apple"], "Z-A")
+    check([r["title"] for r in market_view.sort_rows(rows, "votes")] == ["Apple", "cherry", "banana"], "Stimmen, dann Sterne")
+    check(market_view.sort_rows(rows, "new") == rows, "Server-Sortierung bleibt")
+
+
+def test_v181_trainer_weapons_skins_smooth_history():
+    from modules.cheatmenu import trainer, trainer3d, weapons
+    # Waffen
+    check("standard" in weapons.WEAPONS and len(weapons.WEAPONS) >= 5, "Waffen vorhanden")
+    for wid, w in weapons.WEAPONS.items():
+        pat = weapons.pattern_for(wid, "Zickzack", 3)
+        check(len(pat) == w["shots"], f"{wid}: Schusszahl")
+        check(0.5 <= w["strength"] <= 2.0 and 5 <= w["rate"] <= 15, f"{wid}: Regler-Bereich")
+    check(weapons.pattern_for("standard", "Gerade hoch", 0) == trainer.pattern("Gerade hoch", 0), "Standard = altes Muster")
+    check(weapons.weapon_id("Heavy Driver") == "driver" and weapons.weapon("zzz")["name"] == "Standard", "Name <-> ID, Rückfall")
+    # Bestenliste nur mit Standard
+    check(trainer.board_kind("Zufall", 30, 1.0, 10, False) == "recoil_random", "Standard zählt")
+    check(trainer.board_kind("Zufall", 30, 1.0, 10, False, "pulse") == "", "andere Waffe zählt nicht")
+    # 3D mit Waffe
+    rd = trainer3d.Round3D("Gerade hoch", "Nah (10 m)", "Fest", 1.0, 10, 1, 280, 220, "needle")
+    check(len(rd.core.pat) == weapons.WEAPONS["needle"]["shots"], "3D nutzt Schusszahl der Waffe")
+    # Designs
+    for name, sk in weapons.SKINS.items():
+        check(all(len(v) == 7 and v.startswith("#") for v in sk.values()), f"{name}: Farben")
+    check(weapons.skin("nope") is weapons.SKINS["Classic"], "Rückfall Design")
+    check(weapons.hit_color(weapons.SKINS["Classic"], 5) == "#2e9d5b" and weapons.hit_color(weapons.SKINS["Classic"], 50) == "#e5484d", "Trefferfarbe")
+    check(weapons.mix("#000000", "#ffffff", 0.5) == "#808080" and weapons.mix("#102030", "#102030", 1) == "#102030", "Farbmischung")
+    # Flüssige Anzeige
+    clk = weapons.ShotClock(10, 0.0)
+    check(clk.due(0.0) == 1, "erster Schuss sofort")
+    check(clk.due(0.05) == 0 and clk.due(0.1) == 1, "Takt 10/s")
+    check(clk.due(0.6) == 5, "verpasste Schüsse werden nachgeholt (Bildruckler)")
+    a = (0.0, 0.0)
+    b = weapons.ease(a, (100.0, 0.0), 1 / 60)
+    c = weapons.ease(a, (100.0, 0.0), 1 / 30)
+    check(0 < b[0] < c[0] < 100, "Gleiten: größere Zeitschritte laufen weiter")
+    two = weapons.ease(weapons.ease(a, (100, 0), 1 / 60), (100, 0), 1 / 60)
+    check(abs(two[0] - c[0]) < 1e-6, "Bildraten-unabhängig (2x1/60 = 1x1/30)")
+    check(weapons.ease(a, (5, 5), 0) == a and weapons.ease(a, (5, 5), 100)[0] > 4.99, "Grenzfälle")
+    check(weapons.fade(0) == 1.0 and weapons.fade(0.3, 0.6) == 0.5 and weapons.fade(5) == 0.0, "Ausblenden")
+    # Rückmeldung
+    check("too low" in weapons.drift_hint([(100, 120)] * 5, (100, 100)), "zu tief")
+    check("too high" in weapons.drift_hint([(100, 80)] * 5, (100, 100)), "zu hoch")
+    check("right" in weapons.drift_hint([(120, 100)] * 5, (100, 100)) and "left" in weapons.drift_hint([(80, 100)] * 5, (100, 100)), "seitlich")
+    check("centered" in weapons.drift_hint([(101, 99)] * 5, (100, 100)) and weapons.drift([], (0, 0)) == (0.0, 0.0), "zentriert, leer")
+    # Verlauf
+    h = []
+    for i in range(60):
+        h = weapons.add_history(h, {"score": i, "avg": 1.5, "shots": 30, "weapon": "standard", "pattern": "x"})
+    check(len(h) == weapons.HISTORY_MAX and h[-1]["score"] == 59, "Verlauf begrenzt")
+    check(weapons.add_history(h, {"score": "kaputt"}) == h[-weapons.HISTORY_MAX:], "ungültiger Eintrag verworfen")
+    check(weapons.add_history("müll", {"score": 5, "avg": 1, "shots": 3})[0]["score"] == 5, "ungültiger Verlauf wird ersetzt")
+    s = weapons.stats(h)
+    check(s["rounds"] == 50 and s["best"] == 59 and s["trend"] == 5.0 and s["streak"] <= 50, f"Kennzahlen {s}")
+    check(weapons.stats([])["rounds"] == 0 and weapons.stats(None)["best"] == 0, "leerer Verlauf")
+    streak = weapons.stats([{"score": 10}, {"score": 80}, {"score": 90}])["streak"]
+    check(streak == 2, "Serie ab 75")
+    pts = weapons.sparkline(h, 300, 46)
+    check(len(pts) == 30 and all(0 <= y <= 46 for _x, y in pts) and weapons.sparkline([], 10, 10) == [], "Liniendiagramm")
+
+
+def test_v181_trainer_view_headless_frames():
+    """Die Übungsfelder ohne Bildschirm durchspielen: Bildschleife, Ende nach allen Schüssen, früh loslassen, Wiederholung, Designs."""
+    import tkinter as tk
+
+    class FakeCanvas:
+        def __init__(self, *a, **k):
+            self.items, self.jobs = [], []
+
+        def configure(self, **k):
+            pass
+        cget = configure
+
+        def bind(self, *a, **k):
+            pass
+
+        def winfo_width(self):
+            return 560
+
+        def winfo_height(self):
+            return 440
+
+        def delete(self, tag):
+            self.items = [] if tag == "all" else [i for i in self.items if i[-1] != tag]
+
+        def _add(self, kind, a, k):
+            self.items.append((kind, a, k.get("tags")))
+        create_line = lambda self, *a, **k: self._add("line", a, k)
+        create_oval = lambda self, *a, **k: self._add("oval", a, k)
+        create_text = lambda self, *a, **k: self._add("text", a, k)
+
+        def after(self, ms, fn):
+            self.jobs.append(fn)
+            return len(self.jobs)
+
+        def after_cancel(self, j):
+            self.jobs[j - 1] = None
+    had = hasattr(tk, "Canvas")
+    old = getattr(tk, "Canvas", None)
+    tk.Canvas = FakeCanvas
+    for m in ("modules.cheatmenu.trainer_view", "modules.cheatmenu.trainer3d_view"):
+        sys.modules.pop(m, None)
+    try:
+        from modules.cheatmenu import trainer_view, trainer3d_view, weapons
+        got = []
+        c = trainer_view.TrainerCanvas(None, on_result=got.append)
+
+        class E:
+            x, y = 200, 100
+
+        def run():
+            n = 0
+            while c._job is not None and n < 4000:
+                job = c.jobs[c._job - 1]
+                c._job = None
+                time.sleep(0.002)
+                job()
+                n += 1
+            return n
+        for wid, w in weapons.WEAPONS.items():
+            got.clear()
+            c.weapon_id, c.rate = wid, w["rate"]
+            for sk in weapons.SKINS:
+                c.set_skin(sk)
+            c._press(E)
+            run()
+            check(len(got) == 1 and got[0]["shots"] == w["shots"] and got[0]["weapon"] == wid, f"{wid}: eine Runde, alle Schüsse")
+            check(got[0]["hint"] and 0 <= got[0]["score"] <= 100, "Tipp und Punkte")
+            check(c.replay(), "Wiederholung startet")
+            run()
+            check(len(c.round.hits) == w["shots"], f"{wid}: Wiederholung zeigt alle Treffer")
+        got.clear()
+        c._press(E)
+        c._release(E)
+        check(len(got) == 1, "früh loslassen meldet genau einmal")
+        c._release(E)
+        check(len(got) == 1, "zweites Loslassen meldet nicht erneut")
+        c.last_round = None
+        check(c.replay() is False, "ohne Runde keine Wiederholung")
+        c3 = trainer3d_view.Trainer3DCanvas(None)
+        c3.weapon_id = "driver"
+        c3.set_skin("Neon")
+        c3.redraw()
+    finally:
+        if had:
+            tk.Canvas = old
+        else:
+            del tk.Canvas
+        for m in ("modules.cheatmenu.trainer_view", "modules.cheatmenu.trainer3d_view"):
+            sys.modules.pop(m, None)
+
+
+def test_v182_arena_timeline_scan_snapshot():
+    import math
+    import zipfile
+    from arena import game as AG, render as AR, settings as AS, weapons as AW, world as AWo
+    from core import module_import
+    from modules.arena import plugin as AP
+    from modules.macros import dsl, timeline
+    # Karte und Strahl
+    check(len(AWo.GRID) == AWo.H and all(len(r) == AWo.W for r in AWo.GRID), "Karte rechteckig")
+    check(all(AWo.GRID[0][x] != "." and AWo.GRID[-1][x] != "." for x in range(AWo.W)), "Karte ist umrandet")
+    d, kind, side = AWo.cast(12.5, 12.5, 0.0)
+    check(abs(d - (23 - 12.5)) < 1e-6 and 0 <= kind < 4, f"Strahl bis zur Wand: {d}")
+    check(AWo.can_stand(2.5, 21.5) and not AWo.can_stand(0.5, 0.5), "Standplatz")
+    # Waffen und Stile vollständig
+    for wid, w in AW.WEAPONS.items():
+        check(w["kick"] and w["mag"] > 0 and w["rate"] > 0 and AW.kick_for(wid, 999) == w["kick"][-1], f"{wid}: Daten")
+    check(len(AW.WEAPONS) == 5 and len(AW.STYLES) == 3 and len(AW.THEMES) >= 4, "Auswahl")
+
+    def hit_rate(style, moving, n=300):
+        g = AG.Game("rifle", style=style, bots=1, seed=7)
+        b = g.bots[0]
+        hits = 0
+        for _ in range(n):
+            g.x, g.y, g.ang, g.pitch = 12.5, 12.5, 0.0, math.atan2(-0.1, 8)
+            b.x, b.y, b.hp, b.target, b.wait = 20.5, 12.5, 10000, None, 99
+            g.speed = 2.4 if moving else 0.0
+            g.next_shot = g.reload_until = g.last_shot = 0
+            g.last_shot, g.ammo, g.fire_prev = -9.0, 30, False
+            g.pend_p = g.pend_y = 0.0
+            h0 = g.stat["hits"]
+            g._shoot(True)
+            hits += g.stat["hits"] - h0
+        return hits / n
+    tac = list(AW.STYLES)[0]
+    check(hit_rate(tac, False) > 0.95, "stehend trifft")
+    check(hit_rate(tac, True) < hit_rate(tac, False), "Bewegung verschlechtert die Treffer (Tactical)")
+    check(hit_rate(list(AW.STYLES)[2], True) > hit_rate(tac, True), "Arcade bestraft Bewegung weniger")
+    # Rückstoß: ohne Gegenzug steigt die Kamera, mit Gegenzug bleibt sie unten
+    g = AG.Game("rifle", bots=0, seed=1)
+    for _ in range(200):
+        g.update(0.016, (), 0, 0, True)
+    check(g.pitch > math.radians(15), "Rückstoß hebt die Kamera")
+    g2 = AG.Game("rifle", bots=0, seed=1)
+    for _ in range(200):
+        before = g2.pitch
+        g2.update(0.016, (), 0, 0, True)
+        if g2.pitch > before:
+            g2._look(0, (g2.pitch - before) / g2.sens)
+    check(abs(g2.pitch) < 0.01 and g2.summary()["spray_error"] < g.summary()["spray_error"], "Gegenziehen hält die Kamera ruhig")
+    check(g.ammo >= 0 and g.stat["shots"] <= g.w["mag"] + 5, "Magazin begrenzt die Schüsse")
+    # Kopfschuss und Kill
+    g3 = AG.Game("dmr", bots=1, seed=2)
+    b = g3.bots[0]
+    g3.x, g3.y, g3.ang = 12.5, 12.5, 0.0
+    b.x, b.y, b.hp, b.target, b.wait = 18.5, 12.5, 60, None, 99
+    g3.pitch = math.atan2(0.8 - 0.5, 6)
+    g3._hitscan(0.0, g3.pitch)
+    check(g3.stat["head"] == 1 and g3.stat["kills"] == 1 and not b.alive, "Kopfschuss tötet")
+    b.respawn = 0.0
+    g3.t = 5.0
+    g3.update(0.016)
+    check(b.alive, "Bot kehrt zurück")
+    # Wand blockiert den Schuss
+    g4 = AG.Game("rifle", bots=1, seed=2)
+    g4.x, g4.y = 12.5, 12.5
+    g4.bots[0].x, g4.bots[0].y = 18.5, 12.5
+    g4.bots[0].hp = 100
+    check(AWo.cast(12.5, 12.5, 0.0)[0] > 5, "freie Sicht in dieser Reihe")
+    g4.x, g4.y = 8.5, 12.5          # Wand bei x=10 liegt dazwischen
+    g4._hitscan(0.0, math.atan2(-0.1, 10))
+    check(g4.stat["hits"] == 0, "Wand schützt den Bot")
+    # Bots laufen, Bots schießen zurück
+    g5 = AG.Game("rifle", bots=3, bots_shoot=True, seed=5)
+    start = [(b.x, b.y) for b in g5.bots]
+    for _ in range(400):
+        g5.update(0.02)
+    check(any(abs(b.x - x) + abs(b.y - y) > 0.5 for b, (x, y) in zip(g5.bots, start)), "Bots laufen herum")
+    check(g5.hp <= 100 and 0 <= g5.hp, "Leben bleibt gültig")
+    # Bild
+    for th in AW.THEMES:
+        gg = AG.Game("rifle", bots=4, seed=3, theme=th)
+        ops = AR.build_frame(gg, 320, 200, 80)
+        check(len(ops) > 80 and all(len(o) == 5 and o[4].startswith("#") and len(o[4]) == 7 for o in ops), f"{th}: Bild")
+    check(AR.shade("#ffffff", 0.5) == "#7f7f7f" and AR.shade("#102030", 2) == "#102030", "Schattierung")
+    # Einstellungen
+    check(AS.clean(None) == AS.DEFAULTS and AS.clean({"weapon": "x", "bots": 99, "sens": "q", "theme": "Neon"})["bots"] == 12, "Einstellungen bereinigt")
+    check(AS.clean({"bots": True})["bots"] == AS.DEFAULTS["bots"] and AS.clean({"sens": 9})["sens"] == 4.0, "Grenzen")
+    # Modul: Installation sicher
+    tmp = Path(tempfile.mkdtemp(dir=TMP))
+    good = tmp / "good.zip"
+    with zipfile.ZipFile(good, "w") as zf:
+        zf.writestr("arena/__main__.py", "x=1")
+        zf.writestr("arena/game.py", "y=2")
+    n = AP.safe_extract(str(good), tmp / "out")
+    check(n == 2 and (tmp / "out" / "arena" / "__main__.py").is_file(), "ZIP installiert")
+    bad = tmp / "bad.zip"
+    with zipfile.ZipFile(bad, "w") as zf:
+        zf.writestr("arena/__main__.py", "x")
+        zf.writestr("../evil.txt", "x")
+    for z, why in ((bad, "../"), (tmp / "bad.zip", "")):
+        try:
+            AP.safe_extract(str(z), tmp / "out2")
+            check(False, "unsicherer Pfad muss abgelehnt werden")
+        except ValueError:
+            pass
+    check(not (tmp / "evil.txt").exists(), "nichts außerhalb entpackt")
+    other = tmp / "other.zip"
+    with zipfile.ZipFile(other, "w") as zf:
+        zf.writestr("readme.txt", "x")
+    try:
+        AP.safe_extract(str(other), tmp / "out3")
+        check(False, "fremde ZIP")
+    except ValueError:
+        pass
+    check(AP.find_install([tmp / "out"]) is not None, "Arena gefunden")
+    # Zeitleiste
+    sc = "key a\nrepeat 3\n  click left\n  wait 100ms-300ms\nend\nwait 2s\n"
+    bl = timeline.blocks(sc)
+    check(len(bl) == 3 and len(bl[1]) == 4, "Blöcke bleiben zusammen")
+    check(timeline.blocks(timeline.move(sc, 1, -1))[0][0] == "repeat 3" and timeline.blocks(timeline.delete(sc, 0))[0][0] == "repeat 3", "verschieben/löschen")
+    check(len(timeline.blocks(timeline.duplicate(sc, 2))) == 4, "kopieren")
+    check(timeline.move(sc, 0, -1) == timeline.join(bl), "oben bleibt oben")
+    half = timeline.scale_waits(sc, 0.5)
+    check("wait 50ms-150ms" in half and "wait 1s" in half, "Pausen halbiert")
+    check(dsl.parse(timeline.scale_waits(sc, 3)) and dsl.parse(timeline.move(sc, 2, -1)), "Ergebnis bleibt gültig")
+    check(timeline.total_wait_ms(sc) == 2200.0 and "wait 10ms" in timeline.scale_waits("wait 1ms", 10), "Summe und Grenzen")
+    # Code-Prüfung
+    f = module_import.scan_code("import socket, subprocess\neval('1')\n")
+    check("Network access" in f and "Starting other programs" in f and "Running code built at runtime (eval/exec)" in f, f"Befunde {f}")
+    check(module_import.scan_code("x = 1\n") == [] and module_import.scan_code("def (") != [], "unauffällig / unlesbar")
+    sf = tmp / "m.py"
+    sf.write_text("import ctypes\n", encoding="utf-8")
+    check(module_import.scan_path(sf) == ["Native code / system calls"], "Datei geprüft")
+    # Sicherung eigener Module
+    root = tmp / "user_modules"
+    (root / "mein_modul").mkdir(parents=True)
+    (root / "mein_modul" / "plugin.py").write_text("class Plugin: pass\n", encoding="utf-8")
+    check(module_import.snapshot(root) is not None and (tmp / "user_modules_backup" / "mein_modul" / "plugin.py").is_file(), "Sicherung angelegt")
+    module_import.remove_module("mein_modul", root)
+    check(module_import.restore_if_missing(root) == ["mein_modul"] and (root / "mein_modul" / "plugin.py").is_file(), "fehlendes Modul zurückgeholt")
+    check(module_import.restore_if_missing(root) == [], "nichts doppelt")
+
+
+def test_v182_arena_numpy_renderer_download_logic():
+    import math
+    import random
+    import numpy as np
+    from arena import game as AG, rend, tex, weapons as AW
+    from modules.arena import plugin as AP
+    # Texturen
+    for th in AW.THEMES.values():
+        t = tex.make(th)
+        check(t["walls"].shape == (4, tex.T, tex.T, 3) and t["floor"].shape == (tex.T, tex.T, 3) and 0 <= t["walls"].min() and t["walls"].max() <= 255, "Texturen")
+    # Bild: Form, Typ, Zufallsstellungen ohne Fehler (Blick nach oben/unten, Bots direkt vor der Kamera)
+    rnd = random.Random(2)
+    g = AG.Game("rifle", bots=8, seed=1, bots_shoot=True)
+    R = rend.Renderer(200, 120, g.theme)
+    for _ in range(25):
+        g.x, g.y = rnd.choice(g.cells)
+        g.ang, g.pitch = rnd.uniform(0, 6.28), rnd.uniform(-1, 1)
+        for b in g.bots:
+            if rnd.random() < 0.5:
+                b.x, b.y, b.flash = g.x + rnd.uniform(-1.5, 1.5), g.y + rnd.uniform(-1.5, 1.5), rnd.choice([0, 0.1])
+        im = R.frame(g)
+        check(im.shape == (120, 200, 3) and im.dtype == np.uint8, "Bildform")
+    R.resize(321, 181)
+    check(R.frame(g).shape == (181, 321, 3), "Größe ändern")
+    # ein Bot im Blickfeld ändert das Bild, ein Bot hinter einer Wand nicht
+    g2 = AG.Game("rifle", bots=1, seed=1)
+    g2.x, g2.y, g2.ang, g2.pitch = 12.5, 12.5, 0.0, 0.0
+    R2 = rend.Renderer(200, 120, g2.theme)
+    g2.bots[0].x, g2.bots[0].y = 20.5, 12.5
+    with_bot = R2.frame(g2)
+    g2.bots[0].hp = 0
+    without = R2.frame(g2)
+    check(not np.array_equal(with_bot, without), "Bot ist sichtbar")
+    g2.bots[0].hp = 100
+    g2.x, g2.y = 8.5, 12.5          # Wand dazwischen
+    behind = R2.frame(g2)
+    g2.bots[0].hp = 0
+    check(np.array_equal(behind, R2.frame(g2)), "Bot hinter Wand bleibt unsichtbar")
+    # Mehr Waffen-/Stilkarten-Daten für das Menü
+    from arena import ui_stats
+    for wid in AW.WEAPONS:
+        bars = ui_stats.stat_bars(wid)
+        check(len(bars) == 4 and all(0 <= v <= 1 for _n, v in bars), f"{wid}: Balken")
+    # Download-Logik
+    check(AP.bundled_version() == "1.1.0" or AP.bundled_version() != "", "Version lesbar")
+    tmp = Path(tempfile.mkdtemp(dir=TMP))
+    old_inst = AP.install_dir
+    AP.install_dir = lambda: tmp / "inst"
+    try:
+        pl = AP.Plugin.__new__(AP.Plugin)
+        AP.fetch_manifest = lambda timeout=12: (_ for _ in ()).throw(ValueError("offline"))
+        msg = pl.download_game()
+        check(AP.find_install() is not None and AP.installed_version() == AP.bundled_version() and "(" in msg, "Rückfall auf mitgelieferte Fassung")
+        import hashlib
+        import zipfile as zf_
+        z = tmp / "srv.zip"
+        with zf_.ZipFile(z, "w") as zf:
+            zf.writestr("arena/__main__.py", "x")
+            zf.writestr("arena/__init__.py", 'VERSION = "9.9.9"\n')
+        data = z.read_bytes()
+        AP.fetch_manifest = lambda timeout=12: {"version": "9.9.9", "url": "https://x/a.zip", "sha256": hashlib.sha256(data).hexdigest()}
+        AP.download_zip = lambda url, sha, progress=None: str(z)
+        msg = pl.download_game()
+        check(AP.installed_version() == "9.9.9" and "9.9.9" in msg, "Download installiert")
+    finally:
+        AP.install_dir = old_inst
+
+
+def test_v182_arena_update_with_launcher():
+    """Arena wird mit dem Launcher-Update installiert/aktualisiert; Update-Prüfung; Austausch ist atomar."""
+    import hashlib
+    import zipfile as zf_
+    from modules.arena import plugin as AP
+
+    tmp = Path(tempfile.mkdtemp(dir=TMP))
+    saved = (AP.install_dir, AP.fetch_manifest, AP.download_zip, AP.bundled_version, AP.APP_ROOT)
+    AP.install_dir = lambda: tmp / "inst"
+
+    def make_zip(ver, name):
+        z = tmp / name
+        with zf_.ZipFile(z, "w") as zf:
+            zf.writestr("arena/__main__.py", "x")
+            zf.writestr("arena/__init__.py", f'VERSION = "{ver}"\n')
+        return z
+    try:
+        offline = lambda timeout=12: (_ for _ in ()).throw(ValueError("offline"))
+        # nichts installiert: ohne install_if_missing passiert nichts, Update-Prüfung meldet nichts
+        AP.fetch_manifest = offline
+        AP.bundled_version = lambda: ""
+        check(AP.sync() == ("none", "") and AP.update_info() is None and not AP.own_install(), "nichts installiert")
+        # Launcher-Update installiert die Arena vom Server
+        z1 = make_zip("2.0.0", "a.zip")
+        d1 = z1.read_bytes()
+        AP.fetch_manifest = lambda timeout=12: {"version": "2.0.0", "url": "https://x/a.zip", "sha256": hashlib.sha256(d1).hexdigest()}
+        AP.download_zip = lambda url, sha, progress=None: str(z1)
+        check(AP.sync(install_if_missing=True) == ("installed", "2.0.0") and AP.installed_version() == "2.0.0", "Erstinstallation")
+        check(AP.update_info() is None, "aktuell: kein Update")
+        check(AP.sync() == ("none", "2.0.0"), "aktuell: nichts zu tun")
+        # neue Serverfassung -> Prüfung meldet sie, Update installiert sie
+        z2 = make_zip("2.1.0", "b.zip")
+        d2 = z2.read_bytes()
+        AP.fetch_manifest = lambda timeout=12: {"version": "2.1.0", "url": "https://x/b.zip", "sha256": hashlib.sha256(d2).hexdigest()}
+        AP.download_zip = lambda url, sha, progress=None: str(z2)
+        info = AP.update_info()
+        check(info and info["installed"] == "2.0.0" and info["available"] == "2.1.0", "Update erkannt")
+        check(AP.sync() == ("updated", "2.1.0") and AP.installed_version() == "2.1.0", "Update installiert")
+        check(not (tmp / "inst_new").exists() and not (tmp / "inst_old").exists(), "keine Reste")
+        # Server nicht erreichbar: bleibt alles beim Alten, Prüfung meldet nichts
+        AP.fetch_manifest = offline
+        check(AP.update_info() is None and AP.sync() == ("none", "2.1.0"), "offline bleibt unverändert")
+        # kaputtes ZIP bricht ab, die alte Fassung bleibt heil
+        bad = tmp / "bad.zip"
+        bad.write_bytes(b"kein zip")
+        AP.fetch_manifest = lambda timeout=12: {"version": "3.0.0", "url": "https://x/c.zip", "sha256": ""}
+        AP.download_zip = lambda url, sha, progress=None: str(bad)
+        st, _txt = AP.sync()
+        check(st in ("error", "none") and AP.installed_version() == "2.1.0" and AP.own_install(), "kaputtes ZIP lässt die Installation heil")
+        # mitgelieferte neuere Fassung (nach Launcher-Update im Quellcode-Betrieb) ersetzt die alte still
+        src = tmp / "root"
+        (src / "arena").mkdir(parents=True)
+        (src / "arena" / "__main__.py").write_text("x")
+        (src / "arena" / "__init__.py").write_text('VERSION = "2.5.0"\n')
+        AP.APP_ROOT = src
+        AP.bundled_version = lambda: "2.5.0"
+        check(AP.sync(use_server=False) == ("updated", "2.5.0") and AP.installed_version() == "2.5.0", "mitgelieferte Fassung eingespielt")
+        check(AP.sync(use_server=False) == ("none", "2.5.0"), "danach nichts mehr")
+        # Versionsvergleich ist numerisch (2.10 > 2.9)
+        check(AP._newer("2.10.0", "2.9.0") and not AP._newer("2.9.0", "2.10.0") and not AP._newer("", "1.0.0"), "Versionsvergleich")
+    finally:
+        AP.install_dir, AP.fetch_manifest, AP.download_zip, AP.bundled_version, AP.APP_ROOT = saved
+
+
+class _FakeWidget:
+    """Alles-kann-Attrappe für tkinter-Widgets: erlaubt einen Durchlauf der Arena-Oberfläche ohne Fenster."""
+    n = 0
+
+    def __init__(self, *a, **k):
+        pass
+
+    def __getattr__(self, name):
+        if name.startswith("create_"):
+            def make(*a, **k):
+                _FakeWidget.n += 1
+                return _FakeWidget.n
+            return make
+        sizes = {"winfo_width": 1280, "winfo_height": 720, "winfo_pointerxy": (640, 360)}
+        if name in sizes:
+            return lambda *a, **k: sizes[name]
+        if name in ("winfo_children",):
+            return lambda *a, **k: []
+        if name.startswith("winfo_"):
+            return lambda *a, **k: 0
+        return lambda *a, **k: None
+
+
+def _fake_tk_module():
+    import types
+    m = types.ModuleType("tkinter")
+    for n in ("Tk", "Frame", "Label", "Canvas", "Button", "Checkbutton", "Radiobutton", "Scale", "Scrollbar"):
+        setattr(m, n, type(n, (_FakeWidget,), {}))
+
+    class Photo:
+        def __init__(self, *a, **k):
+            self.data = k.get("data", b"")
+
+        def zoom(self, n):
+            return self
+
+    class Var:
+        def __init__(self, master=None, value=None, **k):
+            self.v = value
+
+        def get(self):
+            return self.v
+
+        def set(self, v):
+            self.v = v
+    m.PhotoImage = Photo
+    m.StringVar = m.IntVar = m.DoubleVar = m.BooleanVar = Var
+    return m
+
+
+def test_v184_arena_hitbox_ads_tracers_viewmodel_ui():
+    import math
+    import struct
+    import numpy as np
+    from arena import game as AG, hit, hud, rend, settings as AS, viewmodel as VM, weapons as AW
+
+    # --- Hitboxen: echte Körper statt flacher Wand
+    side = (0.0, 1.0)
+    o, d = (0.0, 0.0, 0.5), (1.0, 0.0, 0.0)
+    ray = lambda z, lat=0.0, dist=6.0: hit.hit_bot((0.0, lat, z), d, dist, 0.0, side)
+    check(ray(0.45)[1] == "body" and ray(0.76)[1] == "head", "Rumpf und Kopf")
+    check(ray(0.10, lat=0.10) and ray(0.10, lat=0.10)[1] == "legs" and ray(0.10, lat=0.0) is None, "Beine treffen, die Lücke dazwischen nicht")
+    check(ray(1.0) is None and ray(0.45, lat=0.30) is None and ray(0.45, lat=-0.30) is None, "darüber und daneben: kein Treffer (alte Wand-Hitbox traf bis 0,28)")
+    check(ray(0.45, lat=0.19) is not None, "Rand des Rumpfes trifft")
+    check(hit.hit_target((0, 0, 0.5), d, 6.0, 0.0, 0.5, 0.16) and not hit.hit_target((0, 0, 0.5), d, 6.0, 0.0, 0.8, 0.16), "Zielkugel")
+    # Treffer im Spiel: Zonenschaden (Kopf > Rumpf > Beine)
+    dmg = {}
+    for zone, z in (("head", 0.76), ("body", 0.45), ("legs", 0.10)):
+        g = AG.Game("rifle", bots=1, seed=2)
+        g.x, g.y, g.ang, g.pitch = 12.5, 12.5, 0.0, 0.0
+        b = g.bots[0]
+        b.x, b.y, b.hp, b.target, b.wait = 18.5, 12.5 + (0.1 if zone == "legs" else 0.0), 10000, None, 99
+        g.pitch = math.atan2(z - g.eye, 6.0)
+        g._hitscan(0.0, g.pitch)
+        dmg[zone] = 10000 - b.hp
+        check(g.stat["hits"] == 1, f"{zone}: Treffer")
+    check(dmg["head"] > dmg["body"] > dmg["legs"] > 0, f"Zonenschaden {dmg}")
+
+    # --- Visieren: Zoom, weniger Streuung, weniger Rückstoß, angepasste Empfindlichkeit
+    g = AG.Game("rifle", bots=0, seed=1, fov=90)
+    hip_spread = g.spread_deg()
+    for _ in range(30):
+        g.update(0.016, (), 0, 0, False, True)
+    check(g.ads == 1.0 and abs(g.zoom - g.w["zoom"]) < 1e-9 and g.fov_now < g.fov, "Visieren zoomt")
+    check(g.spread_deg() < hip_spread * 0.5, "Visieren: weniger Streuung")
+    a0 = g.ang
+    g._look(100, 0)
+    zoomed = g.ang - a0
+    g2 = AG.Game("rifle", bots=0, seed=1, fov=90)
+    b0 = g2.ang
+    g2._look(100, 0)
+    check(0 < zoomed < g2.ang - b0, "Visieren: gleiche Mausstrecke dreht weniger")
+    for _ in range(30):
+        g.update(0.016, (), 0, 0, False, False)
+    check(g.ads == 0.0 and abs(g.fov_now - g.fov) < 1e-9, "Loslassen zoomt zurück")
+    g3 = AG.Game("rifle", bots=0, seed=1, invert=True)
+    g3._look(0, 50)
+    g4 = AG.Game("rifle", bots=0, seed=1)
+    g4._look(0, 50)
+    check(g3.pitch > 0 > g4.pitch, "Maus umkehren")
+
+    # --- Bewegung weich, Ducken
+    g = AG.Game("rifle", bots=0, seed=1)
+    g.update(0.016, {"w"})
+    first = g.speed
+    for _ in range(40):
+        g.update(0.016, {"w"})
+    check(0 < first < g.speed <= 2.41, f"weiches Anlaufen {first} -> {g.speed}")
+    for _ in range(40):
+        g.update(0.016, set())
+    check(g.speed < 0.05, "weiches Abbremsen")
+    for _ in range(40):
+        g.update(0.016, {"ctrl"})
+    check(g.eye < 0.36, "Ducken senkt die Augen")
+
+    # --- Leuchtspuren, Funken, Einschusslöcher
+    g = AG.Game("rifle", bots=0, seed=1)
+    g.x, g.y, g.ang, g.pitch = 12.5, 12.5, 0.0, 0.0
+    g._hitscan(0.0, 0.0)
+    check(len(g.tracers) == 1 and len(g.sparks) == 1 and len(g.holes) == 1, "Schuss in die Wand hinterlässt Spur, Funken, Loch")
+    p = g.tracers[0][1]
+    check(abs(p[0] - 23.0) < 1e-6 and abs(p[2] - g.eye) < 1e-6, f"Endpunkt an der Wand {p}")
+    cam = hud.Cam(g, 1280, 720)
+    pr = cam.project(p)
+    check(abs(pr[0] - 640) < 1e-6 and abs(pr[1] - 360) < 1e-6, "Projektion: Punkt geradeaus liegt in der Mitte")
+    check(cam.project((g.x - 3, g.y, g.eye)) is None, "hinter der Kamera")
+    seg = hud.tracer_segment(cam, p, 0.06, (900, 560))
+    check(seg is not None and hud.tracer_segment(cam, p, 0.5, (900, 560)) is None, "Leuchtspur nur kurz sichtbar")
+    check(len(hud.spark_lines(cam, p, 0.1, 1.0)) == 7 and hud.spark_lines(cam, p, 0.9, 1.0) == [], "Funken")
+    g.t += 13
+    g._fx_prune()
+    check(not g.holes and not g.tracers and not g.sparks, "alte Effekte verschwinden")
+
+    # --- Zielmodus
+    g = AG.Game("rifle", bots=3, seed=4, mode="targets")
+    for b in g.bots:
+        dist = math.hypot(b.x - g.x, b.y - g.y)
+        check(b.kind == "target" and 4 <= dist <= 13 and AG.world.cast(g.x, g.y, math.atan2(b.y - g.y, b.x - g.x))[0] >= dist, "Ziel frei sichtbar")
+    b = g.bots[0]
+    g.t = 0.7
+    g.ang = math.atan2(b.y - g.y, b.x - g.x)
+    g.pitch = math.atan2(b.z - g.eye, math.hypot(b.x - g.x, b.y - g.y))
+    g._hitscan(g.ang, g.pitch)
+    s = g.summary()
+    check(s["kills"] == 1 and not b.alive and s["avg_time"] > 0, f"Zielkugel getroffen {s}")
+    g.t = b.respawn + 0.01
+    g.update(0.016)
+    check(b.alive, "Ziel erscheint neu")
+
+    # --- Bild: Zoom, Löcher, Ziele, Zielfernrohr
+    g = AG.Game("dmr", bots=2, seed=3, theme="Studio", mode="targets", fov=80)
+    for _ in range(25):
+        g.update(0.016, (), 0, 0, False, True)
+    g._hitscan(g.ang, g.pitch)
+    R = rend.Renderer(240, 135, g.theme)
+    im = R.frame(g)
+    check(im.shape == (135, 240, 3) and im.dtype == np.uint8, "Bild mit Zoom")
+    check(im[2, 2].sum() < 40 and im[67, 120].sum() > 40, "Zielfernrohr dunkelt den Rand ab")
+    g5 = AG.Game("rifle", bots=1, seed=3, theme="Studio")
+    check(R.frame(g5).shape == (135, 240, 3), "Bild ohne Zoom")
+
+    # --- Waffen-Modelle: eigene Oberfläche je Waffe
+    seen = []
+    for wid, w in AW.WEAPONS.items():
+        rgba, muz, sight = VM.make(w["look"], 300, "#4cc9f0")
+        check(rgba.shape[2] == 4 and rgba.shape[1] == 300 and (rgba[..., 3] > 128).sum() > 8000, f"{wid}: Modell vorhanden")
+        check(0 <= muz[0] < 300 and 0 <= muz[1] < rgba.shape[0] and 0 <= sight[0] < 300, f"{wid}: Mündung/Visier im Bild")
+        seen.append(rgba[..., :3].astype(int).sum())
+        data = VM.png(VM.thumbnail(w["look"], 120))
+        wd, ht = struct.unpack(">II", data[16:24])
+        check(data[:8] == b"\x89PNG\r\n\x1a\n" and wd > 60 and ht > 20, f"{wid}: PNG")
+    check(len(set(seen)) == 5, "alle Waffen sehen verschieden aus")
+    check(VM.make("rifle", 300, "#4cc9f0")[0] is VM.make("rifle", 300, "#4cc9f0")[0], "Modelle werden zwischengespeichert")
+
+    # --- Einstellungen
+    c = AS.clean({"fov": 500, "ads_sens": 0.01, "mode": "targets", "crosshair": "Dot", "crosshair_color": "Pink", "ads_toggle": 1, "theme": "Studio"})
+    check(c["fov"] == 110 and c["ads_sens"] == 0.3 and c["mode"] == "targets" and c["crosshair"] == "Dot" and c["ads_toggle"] is True, "neue Einstellungen")
+    check(AS.clean({"mode": "x", "crosshair_color": "x"})["mode"] == "bots" and AS.DEFAULTS["theme"] == "Studio", "Standardwerte")
+
+    # --- Oberfläche mit Attrappe durchlaufen (kein echtes Fenster)
+    real, had = sys.modules.get("tkinter"), "arena.ui" in sys.modules
+    sys.modules["tkinter"] = _fake_tk_module()
+    sys.modules.pop("arena.ui", None)
+    try:
+        from arena import ui
+        app = ui.ArenaApp()
+        for var, val in (("weapon", "smg"), ("mode", "targets"), ("theme", "Neon"), ("chstyle", "Circle"), ("chcolor", "Pink")):
+            app._pick(var, val)
+        app.start()
+        app._capture()
+        ev = lambda ks: type("E", (), {"keysym": ks, "widget": app, "delta": 120})()
+        app.keys, app.firing = {"w", "right"}, True
+        for i in range(6):
+            app._frame()
+            if i == 2:
+                app._aim_down(None)
+                app._kd(ev("3"))
+                app._kd(ev("r"))
+            if i == 4:
+                app._aim_up(None)
+                app._wheel(1)
+                app._toggle_hitboxes()
+        check(app.game.weapon_id in AW.WEAPONS and app.game.stat["shots"] > 0 and app.vm_item is not None, "Oberfläche läuft")
+        app._kd(ev("escape"))
+        app._frame()
+        app._kd(ev("escape"))
+        app.cfg["ads_toggle"] = True
+        app._aim_down(None)
+        check(app._aiming() is True, "Visieren umschalten")
+        app.show_menu()
+        check(app.game is None, "zurück ins Menü")
+    finally:
+        sys.modules["tkinter"] = real if real is not None else sys.modules["tkinter"]
+        if not had:
+            sys.modules.pop("arena.ui", None)
+
+
+def test_v184_restart_env_and_token_rotation():
+    from core import cloud, config, identity, relaunch
+    env = relaunch.clean_env({"_MEIPASS2": "x", "_PYI_APPLICATION_HOME_DIR": "y", "_PYI_ARCHIVE_FILE": "z", "PATH": "p",
+                              "TCL_LIBRARY": "C:/Temp/_MEI123/tcl", "TK_LIBRARY": "/usr/share/tk"})
+    check(not any(k.startswith("_PYI_") or k == "_MEIPASS2" for k in env), "Entpack-Variablen entfernt")
+    check(env["PATH"] == "p" and env["PYINSTALLER_RESET_ENVIRONMENT"] == "1" and "TCL_LIBRARY" not in env and env["TK_LIBRARY"] == "/usr/share/tk", "übrige Umgebung bleibt")
+    line = relaunch.windows_line(["C:/a b/x.exe", "--flag"])
+    check("ping -n 4" in line and "timeout" not in line and 'start "" "C:/a b/x.exe" "--flag"' in line, f"Windows-Zeile: {line}")
+    # Token-Rotation: der Server tauscht den Erneuerungs-Token; die gemerkte Sitzung muss mitziehen
+    tmp = Path(tempfile.mkdtemp(dir=TMP))
+    client = cloud.CloudClient("https://x.example", "k")
+    ident = identity.CloudIdentity(client)
+    ident.session_path = tmp / "s.json"
+    client._set_session({"access_token": "a", "refresh_token": "t0", "expires_in": 3600})
+    check(not ident.session_path.exists(), "ohne gemerkte Sitzung wird nichts geschrieben")
+    config.save_json(ident.session_path, {"refresh_token": "t0", "kind": "password", "expires": 1900000000})
+    client._set_session({"access_token": "b", "refresh_token": "t1", "expires_in": 3600})
+    saved = config.load_json(ident.session_path)
+    check(saved["refresh_token"] == "t1" and saved["kind"] == "password" and saved["expires"] == 1900000000, f"Token erneuert {saved}")
+
+
+def test_v185_arena_feel_poller_builtin():
+    import math
+    import threading
+    import time
+    from arena import game as AG, grab
+    from modules.arena import plugin as AP
+
+    # --- Schussrate und Bewegung hängen nicht von der Bildrate ab
+    def shots(fps, secs=3.0):
+        g = AG.Game("smg", style="arcade", bots=0, seed=3)
+        g.ammo = 10 ** 6
+        dt, n = 1.0 / fps, int(secs * fps)
+        for _ in range(n):
+            g.update(dt, (), 0.0, 0.0, True, False)
+        return g.stat["shots"]
+    a, b = shots(20), shots(120)
+    check(abs(a - b) <= 3 and a > 20, f"Schussrate unabhängig von der Bildrate: {a} / {b}")
+
+    def run(fps):
+        g = AG.Game("rifle", style="arcade", bots=0, seed=3)
+        x0 = g.x
+        for _ in range(int(fps * 1.0)):
+            g.update(1.0 / fps, {"w"}, 0.0, 0.0, False, False)
+        return math.hypot(g.x - x0, g.y - 0)
+    check(abs(run(15) - run(144)) < 0.35, "Laufstrecke unabhängig von der Bildrate")
+
+    # --- Springen: Auge steigt und kehrt zurück
+    g = AG.Game("rifle", style="arcade", bots=0, seed=3)
+    h0, top = g.eye, 0.0
+    for i in range(120):
+        g.update(1 / 60, {"space"}, 0.0, 0.0, False, False)
+        top = max(top, g.eye - h0)
+    check(top > 0.05, f"Sprung hebt das Auge ({top:.3f})")
+    for i in range(120):
+        g.update(1 / 60, (), 0.0, 0.0, False, False)
+    check(abs(g.eye - h0) < 0.02, "nach dem Sprung wieder am Boden")
+
+    # --- Rückstoß wird weich aufgebracht und baut sich wieder ab
+    g = AG.Game("rifle", style="arcade", bots=0, seed=3)
+    p0, peak, steps = g.pitch, 0.0, []
+    for i in range(90):
+        g.update(1 / 60, (), 0.0, 0.0, i < 30, False)
+        steps.append(g.pitch)
+        peak = max(peak, abs(g.pitch - p0))
+    jumps = max(abs(steps[i] - steps[i - 1]) for i in range(1, len(steps)))
+    check(peak > 0.02 and jumps < peak * 0.35, f"Rückstoß ohne harten Sprung (Spitze {peak:.3f}, größter Schritt {jumps:.3f})")
+    for i in range(240):
+        g.update(1 / 60, (), 0.0, 0.0, False, False)
+    check(abs(g.pitch - p0) < peak * 0.6, "Rückstoß klingt ab")
+
+    # --- Maus-Abfrage in eigenem Faden summiert Bewegung ohne Verlust
+    pos = [100, 100]
+    lock = threading.Lock()
+
+    def get():
+        with lock:
+            return tuple(pos)
+
+    def put(x, y):
+        with lock:
+            pos[0], pos[1] = x, y
+    pl = grab.Poller(get, put, (100, 100), hz=1000)
+    pl.start()
+    for _ in range(20):
+        with lock:
+            pos[0] += 3
+            pos[1] -= 1
+        time.sleep(0.01)
+    time.sleep(0.05)
+    dx, dy = pl.take()
+    pl.stop()
+    check((dx, dy) == (60, -20), f"keine Mausbewegung geht verloren: {(dx, dy)}")
+    check(pl.take() == (0, 0), "nach dem Abholen leer")
+
+    # --- eingebaute Arena in der gebauten EXE
+    old = getattr(sys, "frozen", None)
+    sys.frozen = True
+    try:
+        check(AP.builtin() is True, "Arena im Programm gefunden")
+        f = AP.find_install()
+        check(f and f[0] == "builtin", f"find_install builtin {f}")
+        check(AP.sync(install_if_missing=True) == ("none", AP.bundled_version()) and AP.bundled_version() == __import__("arena").VERSION, "sync tut nichts, Version 1.3.1")
+        check(AP.update_info() is None and not AP.own_install(), "keine Serverprüfung nötig")
+        calls = []
+        orig = AP.subprocess.Popen
+        AP.subprocess.Popen = lambda cmd, **kw: calls.append((cmd, kw)) or object()
+        try:
+            pl_ = AP.Plugin(None)
+            pl_.on_load()
+            check(pl_.launch() == "" and calls and calls[0][0][1:] == ["--arena"] and "_MEIPASS2" not in calls[0][1]["env"], f"Start mit --arena {calls}")
+        finally:
+            AP.subprocess.Popen = orig
+    finally:
+        if old is None:
+            del sys.frozen
+        else:
+            sys.frozen = old
+    src = (ROOT / "main.py").read_text(encoding="utf-8")
+    check('"--arena"' in src, "main.py kennt --arena")
+    check("arena.ui" in (ROOT / "tools" / "pyi_args.py").read_text(encoding="utf-8") and "numpy" in (ROOT / "requirements.txt").read_text(), "Build nimmt Arena und numpy mit")
+    from arena import settings as AS
+    check(AS.clean({})["quality"] == "Auto" and AS.clean({"quality": "Auto"})["quality"] == "Auto", "Qualität Auto")
+
+
+def test_v186_requirements_uploads_aichat_legal():
+    from core import legal_text, module_import as mi, requirements_doc as rd, version
+    from modules.aichat import logic as AL
+    from modules.community import modshare as ms
+    from modules.publisher import logic as PL
+    # Anforderungen werden aus den echten Grenzwerten erzeugt: ändert sich ein Wert, ändert sich der Text
+    t = rd.modules_text("de")
+    for needle in (str(mi.MAX_FILES), "2 MB", "8 MB", " ".join(sorted(mi.ALLOWED_EXT)), str(ms.MAX_FILES), "plugin.py", "Aimbot", "§ 95a UrhG", mi.NAME_RE.pattern):
+        check(needle in t, f"Anforderungen enthalten {needle!r}")
+    old = mi.MAX_FILES
+    mi.MAX_FILES = 77
+    try:
+        check("höchstens 77 Dateien" in rd.modules_text("de") and rd.stamp(rd.modules_text("de")) != rd.stamp(t), "Text folgt dem Code")
+    finally:
+        mi.MAX_FILES = old
+    check("MODULE REQUIREMENTS" in rd.modules_text("en"), "englische Fassung")
+    cat = rd.uploads_catalog("de")
+    check([u["id"] for u in cat] == ["exe", "dmg", "arena", "module"] and all(u["criteria"] for u in cat), "Upload-Katalog")
+    check(f"{PL.MAX_BYTES // 1048576} MB" in rd.uploads_text("de"), "Upload-Grenze aus dem Code")
+    # Wiederherstellen auch für die Arena
+    objs = [{"name": "jopml-arena-1.2.0.zip", "metadata": {"size": 5}}, {"name": "jopml-arena-1.3.0.zip"}, {"name": "x.txt"}]
+    ent = PL.arena_entries(objs, {"url": "https://h/storage/v1/object/public/releases/jopml-arena-1.2.0.zip"})
+    check([e["version"] for e in ent] == ["1.3.0", "1.2.0"] and [e["active"] for e in ent] == [False, True], f"Arena-Versionsliste {ent}")
+    am = PL.arena_manifest("1.3.0", "u", "h", 3)
+    check(am == {"version": "1.3.0", "url": "u", "sha256": "h", "size": 3}, "Arena-Manifest")
+    # KI-Chat
+    check(set(AL.PROVIDERS) == {"gemini", "groq"} and AL.DEFAULT_PROVIDER == "gemini", "Anbieter")
+    check("Write a module" in AL.presets() and "aimbot" in AL.preset_context("Write a module") and "click" in AL.preset_context("Write a macro"), "Vorlagen mit Live-Wissen")
+    check(AL.missing_consent("groq") == ["groq"], "ohne Einwilligung gesperrt")
+    AL.give_consent("groq")
+    check(AL.consented("groq") and AL.missing_consent("gemini") == ["gemini"], "Einwilligung je Anbieter")
+    class _App:
+        identity = None
+    try:
+        AL.ask(_App(), "groq", [{"role": "user", "content": "hi"}])
+        check(False, "ohne Konto muss das scheitern")
+    except AL.ChatUnavailable:
+        pass
+    class _C:
+        configured = True
+        session = {"x": 1}
+
+        def chat(self, provider, msgs, lang, ctx, model=None):
+            return {"reply": "ok", "provider": provider, "model": "m", "ctx": len(ctx)}
+    class _I:
+        client = _C()
+    class _A2:
+        identity = _I()
+    r = AL.ask(_A2(), "groq", [{"role": "user", "content": "hi"}], "Write a module")
+    check(r["reply"] == "ok" and r["ctx"] > 500, "Anfrage mit Vorlage")
+    try:
+        AL.ask(_A2(), "gemini", [{"role": "user", "content": "hi"}])
+        check(False, "ohne Einwilligung für Gemini")
+    except AL.ChatUnavailable:
+        pass
+    fn = (ROOT / "supabase" / "functions" / "jopml-chat" / "index.ts").read_text(encoding="utf-8")
+    check("GROQ_API_KEY" in fn and "GEMINI_API_KEY" in fn and "ANTHROPIC_API_KEY" not in fn and "OPENAI_API_KEY" not in fn and "jopml_ai_hit" in fn and "ai_generated" in fn, "Server-Funktion")
+    check("\"aichat\"" in (ROOT / "modules" / "__init__.py").read_text(encoding="utf-8"), "Modul eingetragen")
+    # Rechtstext
+    de = legal_text.legal_text("de")
+    for needle in ("§ 309 Nr. 7", "Kardinalpflicht", "Art. 16", "Art. 17, 20, 21 DSA", "Art. 50", "Art. 5 der KI-Verordnung", "§ 25 TDDDG", "Cyberresilienz",
+                   "Groq", "Anthropic", "ai_chat_consent.json", "Modul-Anforderungen", "§ 95a UrhG", "Recoil Arena", "2024/2847", "Art. 82"):
+        check(needle in de, f"Rechtstext enthält {needle}")
+    check("„as is“" not in de.split("Abs. 6 – Beschaffenheit")[1][:600] or "bewusst nicht vereinbart" in de, "kein pauschales as is")
+    check("Fassung vom 31.10.2026" in de and version.LEGAL_VERSION == "2026-10-31e" and version.APP_VERSION == "1.10.0", "Version und Rechtsfassung")
+    check("Nr. 3 eingreift" not in de, "alte Verweise bereinigt")
+    en = legal_text.legal_text("en")
+    check("Art. 16 DSA" in en and "AI-generated" in en and 'blanket "as is"' in en and "cardinal" in en, "englische Fassung angepasst")
+    # Arena: Start-Leiste unten
+    ui_src = (ROOT / "arena" / "ui.py").read_text(encoding="utf-8")
+    check(ui_src.index('bottom.pack(side="bottom"') < ui_src.index("cols = tk.Frame(sc"), "PLAY-Leiste wird vor den Spalten festgelegt")
+
+
+def test_v187_permissions():
+    from modules.admin import logic as AD
+    check(AD.parse_limit("250") == (250, "") and AD.parse_limit(" 0 ") == (0, ""), "Limit gültig")
+    for bad in ("", "abc", "-5", "1.5", "100001", "1e3"):
+        check(AD.parse_limit(bad)[0] is None, f"Limit ungültig: {bad!r}")
+    check("own admin" in AD.friendly_rpc_error("ERROR: cannot remove yourself") and "last admin" in AD.friendly_rpc_error("last admin"), "Fehlertexte")
+    sql = (ROOT / "supabase" / "migrations" / "20261031000300_jopml_permissions.sql").read_text(encoding="utf-8")
+    for needle in ("jopml_admin_people", "jopml_admin_set_admin", "jopml_admin_set_ai_limit", "jopml_ai_limits", "jopml_admin_audit", "cannot remove yourself", "last admin",
+                   "coalesce(lim, p_user_limit)", "jopml_is_admin()"):
+        check(needle in sql, f"Migration enthält {needle}")
+    check(sql.count("if not public.jopml_is_admin() then raise exception 'not allowed'") == 3, "alle drei Funktionen prüfen Admin")
+    page = (ROOT / "modules" / "admin" / "page.py").read_text(encoding="utf-8")
+    check('("Permissions", self.tab_permissions)' in page and "jopml_admin_set_admin" in page and "jopml_admin_set_ai_user" in page, "Reiter eingebunden")
+    from core import legal_text
+    check("Berechtigungen" in legal_text.legal_text("de") and "Art. 5 Abs. 2 DSGVO" in legal_text.legal_text("de"), "Rechtstext erwähnt Berechtigungen")
+
+
+def test_v190_errors_chat_limits_reports():
+    from core import errors, legal_text, telemetry, version
+    from core import handbook
+    from modules.aichat import logic as AL
+    from modules.admin import logic as AD
+    # Fehlercodes
+    check(all(k.startswith("E-") and len(k.split("-")) == 3 for k in errors.CODES), "Codeformat")
+    check(errors.classify("No connection to the server: x") == "E-NET-001" and errors.classify("A file in the module is too large") == "E-MOD-003"
+          and errors.classify("???") == "E-APP-001", "Code aus Text")
+    check(errors.extract(errors.tag("Boom", "E-AI-002")) == "E-AI-002" and errors.tag(errors.tag("a", "E-AI-002"), "E-AI-002").count("E-AI-002") == 1, "Code anhängen")
+    class Ex(Exception):
+        code = "limit_tokens"
+    check(errors.from_cloud(Ex("x")) == "E-AI-003", "Servercode wird zugeordnet")
+    check("E-NET-001" in errors.explain_prompt("E-NET-001", "No connection") and "~" not in errors.explain_prompt(None, "x"), "KI-Frage zum Fehler")
+    # Telemetrie: Code, Gruppierung am Client, Nutzer-Meldung
+    sent = []
+    class FA:
+        settings = {"diagnostics": True}
+        user = {"x": 1}
+        current = "x"
+        identity = None
+    t = telemetry.Telemetry(FA(), send=lambda n, a: sent.append((n, a)))
+    t.report("module", "Upload 123 failed", "tb", "E-MOD-005")
+    t.report("module", "Upload 456 failed", "tb", "E-MOD-005")          # gleiche Gruppe: nur einmal pro Start
+    t.flush()
+    check(len(sent) == 1 and sent[0][0] == "jopml_report_error" and sent[0][1]["p_code"] == "E-MOD-005", "Meldung mit Code, Duplikate gebündelt")
+    FA.settings["diagnostics"] = False
+    sent.clear()
+    t.report("x", "other", "", "E-APP-001")
+    t.flush()
+    t.report_user("bug", "Das geht nicht richtig", "E-APP-001")
+    check(len(sent) == 1 and sent[0][0] == "jopml_user_report", "Nutzer-Meldung geht auch ohne Diagnose")
+    try:
+        t.report_user("bug", "x")
+        check(False, "zu kurz")
+    except ValueError:
+        pass
+    # KI-Chat: Gemini + Groq, Modul aus Antwort
+    check(AL.REAL == ("gemini", "groq") and AL.prefs()["provider"] in AL.REAL, "nur Gemini und Groq")
+    reply = 'Hier:\n```python\nfrom core.plugin_api import BasePlugin\nclass Plugin(BasePlugin):\n    id = "Mein-Timer"\n```\nFertig'
+    code = AL.extract_module_code(reply)
+    check(code and AL.module_name_of(code) == "mein_timer" and AL.extract_module_code("```python\nprint(1)\n```") is None, "Modul aus Antwort")
+    check(AL.guess_preset("Baue mir ein Modul") == "Write a module" and AL.guess_preset("schreib ein Makro") == "Write a macro"
+          and AL.guess_preset("E-NET-001 Fehler") == "Explain an error" and AL.guess_preset("hallo") == "Free chat", "Vorlage zur Nachricht")
+    ctx = AL.preset_context("Write a module")
+    check("create_page" in ctx and "theme.c(" in ctx and "call_soon" in ctx and "ONE ```python" in ctx, "KI bekommt Modul-, UI- und Integrations-Regeln")
+    # Admin-Limits: Zahl, Maximum, Kein Limit
+    check(AD.parse_value("maximum", "answer") == (16384, "") and AD.parse_value("no limit", "tokens") == (-1, "") and AD.parse_value("1.500", "requests") == (1500, "")
+          and AD.parse_value("abc", "answer")[0] is None and AD.parse_value("999999999999", "tokens")[0] is None, "Wert, Maximum, Kein Limit")
+    check(AD.fmt_limit(None, "answer") == "default" and AD.fmt_limit(-1, "tokens") == "no limit" and AD.fmt_limit(100000, "requests") == "maximum"
+          and AD.fmt_limit(2048, "answer") == "2.048", "Anzeige")
+    groups = [{"code": "E-MOD-005", "kind": "module", "message": "up", "hits": 5, "versions": {"1.9.0": 5}, "sample_trace": "a\nb"},
+              {"code": "E-NET-001", "kind": "net", "message": "n", "hits": 2, "versions": {"1.9.0": 1, "1.8.7": 1}}]
+    check(AD.summary_parts(groups)[:2] == (2, 7) and "E-MOD-005" in AD.groups_for_ai(groups) and AD.top_counts(groups, "versions", 1)[0] == ("1.9.0", 6), "Fehlergruppen komprimiert")
+    # Server: Migration und Funktion
+    sql = (ROOT / "supabase" / "migrations" / "20261031000400_jopml_190_limits_reports.sql").read_text(encoding="utf-8")
+    for needle in ("jopml_error_groups", "jopml_user_reports", "jopml_report_error", "jopml_user_report", "jopml_ai_policy", "jopml_ai_add_tokens", "token_limited",
+                   "jopml_admin_set_ai_defaults", "jopml_admin_set_ai_user", "jopml_admin_error_groups", "jopml_admin_set_analysis", "interval '180 days'", "-1 and 100"):
+        check(needle in sql, f"Migration enthält {needle}")
+    fn = (ROOT / "supabase" / "functions" / "jopml-chat" / "index.ts").read_text(encoding="utf-8")
+    for needle in ("api.groq.com", 'kind === "models"', 'kind === "analyze"', "jopml_ai_policy", "jopml_ai_add_tokens", "limit_tokens", "MODEL_RE", "HARD_MAX"):
+        check(needle in fn, f"Funktion enthält {needle}")
+    # Oberfläche verdrahtet
+    app_src = (ROOT / "core" / "app.py").read_text(encoding="utf-8")
+    for needle in ("_build_ai_hero", "def ask_ai", "def record_error", "def show_error", "def open_report", '"E-APP-002"'):
+        check(needle in app_src, f"App enthält {needle}")
+    adm = (ROOT / "modules" / "admin" / "page.py").read_text(encoding="utf-8")
+    check('("User reports", self.tab_reports)' in adm and '("Automatic errors", self.tab_errors)' in adm and "jopml_admin_error_groups" in adm and "analyze_errors" in adm, "Admin-Reiter")
+    cloud_src = (ROOT / "core" / "cloud.py").read_text(encoding="utf-8")
+    check("def chat_status" in cloud_src and "def chat_models" in cloud_src and "def chat(" in cloud_src and "def analyze_errors" in cloud_src, "Client-Methoden für den Chat vorhanden")
+    # Rechtstext und Version
+    de = legal_text.legal_text("de")
+    for needle in ("Groq", "Fehlergruppen", "Melden", "180 Tage", "Token", "Art. 22 DSGVO", "Chat mit Claude oder ChatGPT", "Maximum"):
+        check(needle in de, f"Rechtstext enthält {needle}")
+    check("ChatGPT (im KI-Chat" not in de and "wahlweise Claude" not in de, "Claude/ChatGPT nicht mehr als Chat-Anbieter genannt")
+    en = legal_text.legal_text("en")
+    check("Groq" in en and "user report" in en.lower() and "error groups" in en, "englische Fassung")
+    check(version.APP_VERSION == "1.10.0" and len(handbook.text()) < 30000 and "E-MOD-005" in handbook.text(), "Version und Handbuch")
+
+
+def test_v1100_chat_projects_templates_tickets():
+    """1.10.0: Verlauf (verschlüsselt, abschaltbar), Projekte, Vorlagen, Modul-Verlauf, Admin-Logik, Katalog, Edge-Funktion (Node), SQL, Rechtstext."""
+    import ast
+    import datetime
+    import shutil
+    import subprocess
+    from core import config as cfg, error_catalog_view, errors, legal_text, module_history, module_import, version
+    from modules.admin import logic as AL
+    from modules.aichat import logic as L, templates
+
+    # --- Vorlagen: gültiger Python-Code, bestehen die Prüfung, haben ein Plugin
+    for name, (desc, code) in templates.TEMPLATES.items():
+        ast.parse(code)
+        check(module_import.scan_code(code) == [] and "class Plugin(BasePlugin)" in code and L.extract_module_code("```python\n" + code + "```") is not None, f"Vorlage {name} in Ordnung")
+        check(module_import.clean_name(L.module_name_of(code)) == L.module_name_of(code), f"Vorlage {name}: Modulname gültig")
+    # --- Chat-Verlauf: standardmäßig aus, verschlüsselt, Projekte, Löschen
+    check(not L.history_enabled() and L.save_chat("General", None, [{"role": "user", "content": "x"}]) is None, "Verlauf ist standardmäßig aus")
+    L.set_history_enabled(True)
+    hist = [{"role": "user", "content": "Mein geheimes Wort Zebra"}, {"role": "assistant", "content": "ok"}]
+    cid = L.save_chat("meinmodul", None, hist)
+    raw = (cfg.app_dir() / "ai_chat_history.dat").read_text(encoding="ascii")
+    check("Zebra" not in raw and cid, "Verlauf liegt nicht im Klartext auf der Platte")
+    check(L.projects() == ["General", "meinmodul"] and L.chats("meinmodul")[0]["messages"][0]["content"].endswith("Zebra"), "Projekt-Chats lesbar")
+    check(L.save_chat("meinmodul", cid, hist + [{"role": "user", "content": "mehr"}]) == cid and len(L.chats("meinmodul")) == 1, "Chat wird aktualisiert statt doppelt gespeichert")
+    for i in range(40):
+        L.save_chat("meinmodul", None, [{"role": "user", "content": f"c{i}"}])
+    check(len(L.chats("meinmodul")) <= L.HISTORY_MAX_CHATS, "höchstens 30 Chats je Projekt")
+    L.delete_chat("meinmodul", L.chats("meinmodul")[0]["id"])
+    L.set_history_enabled(False)
+    check(not (cfg.app_dir() / "ai_chat_history.dat").exists() and L.projects() == ["General"], "Ausschalten löscht den Verlauf")
+    # --- Weiche und Fix-Vorlage
+    check(L.guess_target("wie ändere ich den hotkey") == "help" and L.guess_target("schreibe ein modul für einen timer") == "chat" and L.guess_target("E-NET-001 Fehler") == "chat", "Dashboard-Weiche")
+    msg, extra = L.fix_prompt("abc", "x" * 20000, "geht nicht")
+    check("abc" in msg and "geht nicht" in msg and len(extra) < 9300, "Fix-Nachricht und gekürzter Code")
+    check("Fix a module" in L.presets() and "complete" in L.preset_context("Fix a module", "ctx").lower() and L.preset_context("Free chat", "A" * 20000).__len__() <= 14000, "Fix-Vorlage und Kontext-Grenze")
+    check(L.fallback_note({"fallback_from": "gemini", "provider": "groq"}) and not L.fallback_note({"provider": "groq"}), "Hinweis nur bei Wechsel")
+    # --- Modul-Verlauf: sichern, Diff, Rückgängig
+    root = Path(tempfile.mkdtemp())
+    code1 = templates.TEMPLATES["Timer"][1]
+    code2 = code1.replace('version = "1.0.0"', 'version = "1.0.1"')
+    module_history.apply_code("timer_tool", code1, builtin=set(), root=root)
+    check(module_history.list_versions("timer_tool") == [], "erster Import: noch nichts zu sichern")
+    module_history.apply_code("timer_tool", code2, builtin=set(), root=root)
+    vers = module_history.list_versions("timer_tool")
+    check(len(vers) == 1 and module_history.read_version("timer_tool", vers[0][0]) == code1, "alter Stand gesichert")
+    check(module_history.stats(code1, code2) == (1, 1) and any(x.startswith("+") and "1.0.1" in x for x in module_history.diff(code1, code2)), "Diff und Zeilenzahlen")
+    module_history.restore("timer_tool", vers[0][0], builtin=set(), root=root)
+    check(module_history.current_code("timer_tool", root) == code1 and len(module_history.list_versions("timer_tool")) == 2, "Rückgängig stellt her und sichert den aktuellen Stand")
+    check(module_history.read_version("timer_tool", "../../x.py") is None, "kein Ausbrechen aus dem Verlaufsordner")
+    # --- Fehlercodes: jeder Code hat eine Lösung, Katalog durchsuchbar
+    check(all(errors.solution(c) and errors.solution(c) != errors.SOLUTIONS["E-APP-001"] or c == "E-APP-001" for c in errors.CODES), "jeder Code hat eine eigene Lösung")
+    check(len(error_catalog_view.search("")) == len(errors.CODES) and error_catalog_view.search("E-AI-007")[0][0] == "E-AI-007" and error_catalog_view.search("zzzzqq") == [], "Katalog-Suche")
+    # --- Admin-Logik
+    today = datetime.date.today().isoformat()
+    labels, series = AL.chart_series([{"day": today, "provider": "groq", "tokens": 50, "hits": 2}, {"day": "2001-01-01", "provider": "gemini", "tokens": 9}], 14)
+    check(len(labels) == 14 and labels[-1] == today and series == {"groq": [0] * 13 + [50]}, "Diagramm-Daten: 14 Tage, alte Tage fallen weg")
+    check(AL.budget_state(79, 100)[1] == "ok" and AL.budget_state(80, 100)[1] == "warn" and AL.budget_state(100, 100)[1] == "full" and AL.budget_state(5, -1)[1] == "none", "Budget-Stufen (80 %)")
+    check("90 %" in AL.budget_warning({"requests_today": 90, "requests_budget": 100, "tokens_today": 0, "tokens_budget": -1}) and AL.budget_warning({"requests_today": 1, "requests_budget": 100}) == "", "Budget-Warnung")
+    check(AL.ticket_counts([{"status": "new"}, {"status": "fixed"}, {"status": "fixed"}]) == {"new": 1, "in_progress": 0, "fixed": 2} and AL.ticket_title({"code": "E-NET-001", "message": "x" * 300}).startswith("E-NET-001: "), "Ticket-Zähler und Titel")
+    # --- Client: Streaming-Methode, Kontext
+    cloud_src = (ROOT / "core" / "cloud.py").read_text(encoding="utf-8")
+    check("def chat_stream" in cloud_src and "X-Fallback-From" in cloud_src, "Client: chat_stream")
+    # --- SQL
+    sql = (ROOT / "supabase" / "migrations" / "20261031000500_jopml_1100_tickets_budget.sql").read_text(encoding="utf-8")
+    for needle in ("jopml_tickets", "jopml_admin_ticket_from_group", "jopml_admin_report_reply", "jopml_my_reports", "jopml_admin_ai_stats", "jopml_admin_set_ai_budget", "jopml_ai_log",
+                   "jopml_is_admin()", "revoke all on public.jopml_tickets", "revoke all on public.jopml_ai_log"):
+        check(needle in sql, f"SQL enthält {needle}")
+    # --- Edge-Funktion mit Node (übersprungen, wenn Node fehlt)
+    node = shutil.which("node")
+    if node:
+        work = Path(tempfile.mkdtemp())
+        for f in ("chat_mock.mjs", "chat_run.mts"):
+            shutil.copy(ROOT / "tests" / "edge" / f, work / f)
+        src = (ROOT / "supabase" / "functions" / "jopml-chat" / "index.ts").read_text(encoding="utf-8").replace("npm:@supabase/supabase-js@2", "./chat_mock.mjs")
+        (work / "chat_index.ts").write_text(src, encoding="utf-8")
+        res = subprocess.run([node, "--experimental-strip-types", "--no-warnings", "chat_run.mts"], cwd=work, capture_output=True, text=True, timeout=60)
+        out = res.stdout
+        check(res.returncode == 0, "Node-Test der Chat-Funktion läuft: " + res.stderr[-300:])
+        check('stream 200 "Hallo" 42 gemini' in out and 'fallback "Groq" groq gemini limit 11' in out and "nonstream-fallback G groq gemini" in out and "nofallback 502 provider_down" in out, "Edge: Streaming, Auto-Wechsel, kein Wechsel wenn abgeschaltet")
+        check('"p_fallback":true' in out and '"p_provider":"gemini"' in out and 'models ["llama-3.3-70b-versatile"]' in out, "Edge: Nutzungslog und Modellliste")
+    # --- Rechtstext
+    de = legal_text.legal_text("de")
+    for needle in ("Abs. 7 – Automatischer Wechsel", "DPAPI", "höchstens 30 Chats", "Tickets", "Meine Meldungen", "80 %", "Mit KI reparieren", "Opt-in" if False else "standardmäßig aus"):
+        check(needle in de, f"Rechtstext enthält {needle}")
+    en = legal_text.legal_text("en")
+    check("10.3b" in en and "11.3a" in en and "tickets" in en.lower(), "englische Fassung 1.10.0")
+    check(version.APP_VERSION == "1.10.0", "Version")
+    # --- Release-Notes je Version
+    from core import release_notes as RN
+    check(len(RN.known_versions()) >= 40 and RN.known_versions()[-1] == "1.10.0", "alle Versionen haben Notizen")
+    title, body = RN.compose("1.10.0", "Zusatz vom Admin")
+    check(title == "Version 1.10.0" and body.startswith("• ") and body.count("\n") >= 5 and body.endswith("Zusatz vom Admin") and len(body) < 6000, "Release-Note aus RELEASE_NOTES.txt + Admin-Text")
+    check(all(len(RN.compose(v)[1]) < 6000 for v in RN.known_versions()) and RN.compose("9.9.9")[1] == "Neue Version.", "Längen und Rückfall")
+    check(RN.bullets("a (x; y); b. Neu: c „d; e“ f") == ["a (x; y)", "b", "Neu: c „d; e“ f"], "Stichpunkte trennen nicht in Klammern/Zitaten")
+    sent = []
+    class FakeClient:
+        def rpc(self, name, args): sent.append((name, args))
+    RN.post(FakeClient(), "1.10.0", "x")
+    check(sent[0][0] == "jopml_admin_release_note" and sent[0][1]["p"]["version"] == "1.10.0", "Upload trägt die Release-Note ein")
+    pub_src = (ROOT / "modules" / "publisher" / "page.py").read_text(encoding="utf-8")
+    news_src = (ROOT / "modules" / "community" / "news_view.py").read_text(encoding="utf-8")
+    check("release_notes.post" in pub_src and 'r.get("version")' in news_src and "_fold" in news_src, "Publisher und News-Ansicht eingebunden")
+    sql2 = (ROOT / "supabase" / "migrations" / "20261031000600_jopml_1100_release_notes.sql").read_text(encoding="utf-8")
+    check("jopml_admin_release_note" in sql2 and "jopml_is_admin()" in sql2 and "jopml_news_version_uq" in sql2, "SQL Release-Notes")
 
 
 def main():

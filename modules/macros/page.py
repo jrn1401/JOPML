@@ -9,7 +9,7 @@ import customtkinter as ctk
 from core import ai_client, theme, ui
 from core.i18n import tr
 
-from . import dsl, generator, recorder
+from . import dsl, generator, recorder, timeline
 
 REFERENCE = """click [left|right|middle] [X Y]
 doubleclick [left|right|middle] [X Y]
@@ -23,6 +23,7 @@ wait 50ms           (ms, s, m; 100ms-300ms = random)
 repeat 10 ... end   |   repeat forever ... end
 set n 0 / add n 1    (variables; "type" shows {n})
 if n >= 3 ... else ... end   (== != < > <= >=)
+if color 500 300 == #FF0000 ... end   (pixel colour, also != and "tol 30")
 stop                 (ends the macro)
 # comment"""
 
@@ -38,12 +39,14 @@ GEN_EXAMPLES = [("Fast clicking", "Click every 50 ms for 2 minutes"),
                 ("Random pauses", "Click at 500 300, then at 700 400 with random pauses of 100 to 300 ms, 100 times")]
 
 
+DEBUG_SPEEDS = {"Debug: off": 0.0, "Debug: slow": 0.8, "Debug: normal": 0.4, "Debug: fast": 0.1}
+
 # Autovervollständigung: Befehl -> Schreibweise (kurze Syntaxhilfe)
 COMPLETIONS = {
     "click": "click [left|right|middle] [X Y]", "doubleclick": "doubleclick [left|right|middle] [X Y]", "move": "move X Y",
     "key": "key NAME", "hold": "hold NAME DURATION", "down": "down NAME", "up": "up NAME", "type": 'type "text"',
     "scroll": "scroll N", "wait": "wait 100ms", "repeat": "repeat N … end", "set": "set NAME N", "add": "add NAME N",
-    "if": "if NAME == N … end", "else": "else", "end": "end", "stop": "stop",
+    "if": "if NAME == N … end   |   if color X Y == #RRGGBB [tol N] … end", "else": "else", "end": "end", "stop": "stop",
 }
 
 
@@ -89,12 +92,16 @@ class MacroPage(ctk.CTkScrollableFrame):
         self.saved.pack(side="left", padx=6)
         ctk.CTkButton(top, text=tr("Delete"), width=80, fg_color="gray35", hover_color="gray25",
                       command=self.delete).pack(side="left", padx=6)
+        self.fav_btn = ctk.CTkButton(top, text="☆ " + tr("Favorite"), width=100, fg_color=theme.c("hover"), text_color=theme.TEXT,
+                                     command=self.toggle_fav)
+        self.fav_btn.pack(side="left", padx=6)
         self.text = ctk.CTkTextbox(e, height=230, font=ctk.CTkFont(family="Consolas", size=13), wrap="none",
                                    fg_color=theme.c("inset"))
         self.text.pack(fill="x", padx=16, pady=10)
         self.text.insert("1.0", plugin.current_text or EXAMPLE)
         try:
             self.text._textbox.tag_config("macro_error", background="#7f1d1d", foreground="#ffffff")
+            self.text._textbox.tag_config("macro_run", background="#1d4ed8", foreground="#ffffff")
         except Exception:
             pass
         self._live_job = None
@@ -111,6 +118,9 @@ class MacroPage(ctk.CTkScrollableFrame):
         ctk.CTkButton(ctl, text="■  " + tr("Stop"), width=100, fg_color="#c0392b", hover_color="#962d22",
                       command=plugin.stop).pack(side="left", padx=6)
         ctk.CTkButton(ctl, text=tr("Check"), width=90, command=self.check).pack(side="left", padx=6)
+        self.debug_menu = ctk.CTkOptionMenu(ctl, width=150, values=[tr(k) for k in DEBUG_SPEEDS])
+        self.debug_menu.set(tr("Debug: off"))
+        self.debug_menu.pack(side="left", padx=6)
         ctk.CTkButton(ctl, text=tr("Preview"), width=90, fg_color=theme.c("hover"), text_color=theme.TEXT, command=self.preview).pack(side="left", padx=2)
         self.pos_btn = ctk.CTkButton(ctl, text=tr("Insert mouse position (3 s)"), width=210, command=self.capture_pos)
         self.pos_btn.pack(side="left", padx=6)
@@ -121,6 +131,10 @@ class MacroPage(ctk.CTkScrollableFrame):
         self.rec_btn.pack(side="left")
         for label, cmd in ((tr("Copy"), self.copy_text), (tr("Export …"), self.export), (tr("Import …"), self.import_file)):
             ctk.CTkButton(ctl2, text=label, width=96, fg_color=theme.c("hover"), text_color=theme.TEXT, command=cmd).pack(side="left", padx=6)
+        ctk.CTkButton(ctl2, text=tr("Explain"), width=96, fg_color=theme.c("hover"), text_color=theme.TEXT, command=self.explain).pack(side="left", padx=6)
+        ctk.CTkButton(ctl2, text=tr("Timeline"), width=96, fg_color=theme.c("hover"), text_color=theme.TEXT, command=self.open_timeline).pack(side="left", padx=6)
+        self.fix_btn = ctk.CTkButton(ctl2, text=tr("Fix with AI"), width=110, fg_color=theme.c("hover"), text_color=theme.TEXT, command=self.fix_with_ai)
+        self.fix_btn.pack(side="left", padx=6)
         self.recorder = recorder.Recorder()
         self.status = ctk.CTkLabel(e, text="", anchor="w", justify="left", wraplength=640)
         self.status.pack(fill="x", padx=16, pady=(0, 4))
@@ -301,8 +315,147 @@ class MacroPage(ctk.CTkScrollableFrame):
         return True
 
     def run(self):
-        err = self.plugin.run(self.script())
+        label = next((k for k in DEBUG_SPEEDS if tr(k) == self.debug_menu.get()), "Debug: off")
+        delay = DEBUG_SPEEDS[label]
+        if delay <= 0:
+            self._mark_run(0)
+            err = self.plugin.run(self.script())
+        else:
+            err = self.plugin.run(self.script(), debug_delay=delay, on_trace=self._on_trace)
         self._say(err, False) if err else self._say(tr("Running … (F7 or Stop ends it)"))
+
+    # ---------- Fehlersuche: aktuelle Zeile hervorheben, Schleifenzähler und Variablen zeigen
+    def _on_trace(self, line, loops, variables):
+        self.app.call_soon(self._show_trace, line, loops, variables)
+
+    def _show_trace(self, line, loops, variables):
+        if not self.winfo_exists():
+            return
+        self._mark_run(line)
+        parts = [tr("Line {n}", n=line)]
+        parts += [tr("loop in line {l}: {i}/{n}", l=l, i=i, n=n if n else "∞") for l, (i, n) in sorted(loops.items())]
+        if variables:
+            parts.append(", ".join(f"{k}={v}" for k, v in sorted(variables.items())))
+        self._say(" · ".join(parts))
+
+    def _mark_run(self, line):
+        try:
+            tb = self.text._textbox
+            tb.tag_remove("macro_run", "1.0", "end")
+            if line:
+                tb.tag_add("macro_run", f"{line}.0", f"{line}.end+1c")
+                tb.see(f"{line}.0")
+        except Exception:
+            pass
+
+    # ---------- Erklären und Reparieren
+    def _ai_ask(self, kind):
+        return lambda messages: ai_client.ask(self.app, kind, messages)
+
+    def explain(self):
+        try:
+            cmds = dsl.parse(self.script())
+        except dsl.MacroError as exc:
+            self._mark(exc.line)
+            self._say(str(exc), False)
+            return
+        show_explanation(self, self.app, self.script(), cmds)
+
+    def fix_with_ai(self):
+        script = self.script()
+        try:
+            dsl.check(dsl.parse(script))
+        except dsl.MacroError as exc:
+            error = str(exc)
+        else:
+            self._say(tr("No error found – nothing to fix."))
+            return
+        if not ai_client.available(self.app):
+            self._say(tr("The AI needs a cloud account (sign in with a JOPMakro account or Google while the server is set up)."), False)
+            return
+        if self._busy:
+            return
+        self._busy = True
+        self.fix_btn.configure(state="disabled")
+        self._say(tr("Asking the AI for a fix …"))
+
+        def work():
+            try:
+                fixed = generator.fix(script, error, self._ai_ask("macro"))
+                self.app.call_soon(self._fix_done, script, fixed, "")
+            except generator.GenerateError as exc:
+                self.app.call_soon(self._fix_done, script, "", str(exc))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _fix_done(self, old, fixed, err):
+        self._busy = False
+        if not self.winfo_exists():
+            return
+        self.fix_btn.configure(state="normal")
+        if err:
+            self._say(err, False)
+            return
+        self._say(tr("The AI suggests a fix. Check it and press Apply."))
+        win = ctk.CTkToplevel(self, fg_color=theme.c("main"))
+        win.title(tr("Fix suggestion"))
+        win.geometry("520x420")
+        win.attributes("-topmost", True)
+        ctk.CTkLabel(win, text=tr("Suggested fix (checked, valid):"), anchor="w").pack(fill="x", padx=14, pady=(12, 4))
+        box = ctk.CTkTextbox(win, font=ctk.CTkFont(family="Consolas", size=12))
+        box.pack(fill="both", expand=True, padx=14, pady=6)
+        box.insert("1.0", fixed)
+        box.configure(state="disabled")
+
+        def apply():
+            self.text.delete("1.0", "end")
+            self.text.insert("1.0", fixed)
+            self._mark(0)
+            self._say(tr("Fix applied."))
+            win.destroy()
+        ctk.CTkButton(win, text=tr("Apply"), width=120, command=apply).pack(pady=10)
+
+    # ---------- Zeitleiste: Schritte verschieben/löschen/kopieren und Pausen skalieren (statt Ziehen mit der Maus: ▲ ▼)
+    def open_timeline(self):
+        top = ctk.CTkToplevel(self, fg_color=theme.c("main"))
+        top.title(tr("Timeline"))
+        top.geometry("560x520")
+        top.transient(self.winfo_toplevel())
+        ui.muted(top, "Each row is one step (a repeat or if block counts as one). Move steps with the arrows, copy or delete them, "
+                      "or make all pauses faster or slower. The macro text is changed immediately.").pack(fill="x", padx=14, pady=(12, 4))
+        info = ctk.CTkLabel(top, text="", anchor="w")
+        info.pack(fill="x", padx=14)
+        area = ctk.CTkScrollableFrame(top, fg_color=theme.c("card"))
+        area.pack(fill="both", expand=True, padx=12, pady=6)
+
+        def apply(text):
+            self.text.delete("1.0", "end")
+            self.text.insert("1.0", text)
+            self._live_check()
+            render()
+
+        def render():
+            for w in area.winfo_children():
+                w.destroy()
+            script = self.script()
+            bl = timeline.blocks(script)
+            ms = timeline.total_wait_ms(script)
+            info.configure(text=tr("{n} steps · pauses add up to about {s} s per run (without repeats)", n=len(bl), s=round(ms / 1000, 1)))
+            for i, b in enumerate(bl):
+                r = ctk.CTkFrame(area, fg_color=theme.c("inset"), corner_radius=8)
+                r.pack(fill="x", pady=2)
+                ctk.CTkLabel(r, text=f"{i + 1}.", width=28).pack(side="left", padx=(8, 0))
+                ctk.CTkLabel(r, text=timeline.summary(b)[:60], anchor="w", font=ctk.CTkFont(family="Consolas", size=12)).pack(side="left", padx=6, pady=5)
+                for txt, fn in (("✕", lambda i=i: apply(timeline.delete(script, i))), ("⧉", lambda i=i: apply(timeline.duplicate(script, i))),
+                                ("▼", lambda i=i: apply(timeline.move(script, i, 1))), ("▲", lambda i=i: apply(timeline.move(script, i, -1)))):
+                    ctk.CTkButton(r, text=txt, width=28, height=26, fg_color=theme.c("hover"), text_color=theme.TEXT, command=fn).pack(side="right", padx=1)
+        row = ctk.CTkFrame(top, fg_color="transparent")
+        row.pack(fill="x", padx=12, pady=(0, 12))
+        ctk.CTkLabel(row, text=tr("Pause speed")).pack(side="left")
+        for label, f in (("×2 faster", 0.5), ("×1.5 faster", 1 / 1.5), ("×1.5 slower", 1.5), ("×2 slower", 2.0)):
+            ctk.CTkButton(row, text=tr(label), width=90, height=28, fg_color=theme.c("hover"), text_color=theme.TEXT,
+                          command=lambda f=f: apply(timeline.scale_waits(self.script(), f))).pack(side="left", padx=3)
+        ctk.CTkButton(row, text=tr("Close"), width=70, command=top.destroy).pack(side="right")
+        render()
 
     def save(self):
         try:
@@ -322,6 +475,7 @@ class MacroPage(ctk.CTkScrollableFrame):
             self.text.insert("1.0", self.plugin.load(name))
             self.name.delete(0, "end")
             self.name.insert(0, name)
+            self._favs_changed()
         except (OSError, ValueError):
             self._say(tr("This macro could not be opened."), False)
 
@@ -330,6 +484,25 @@ class MacroPage(ctk.CTkScrollableFrame):
         if name and messagebox.askyesno(tr("Delete"), tr("Delete macro '{n}'?", n=name)):
             self.plugin.delete(name)
             self.refresh_saved()
+            self._favs_changed()
+
+    def toggle_fav(self):
+        try:
+            on = self.plugin.toggle_favorite(self.name.get())
+        except ValueError as exc:
+            self._say(tr(str(exc)), False)
+            return
+        self._say(tr("Added to the dashboard.") if on else tr("Removed from the dashboard."))
+        self._favs_changed()
+
+    def _favs_changed(self):
+        try:
+            self.fav_btn.configure(text=("★ " if self.plugin.is_favorite(self.name.get().strip()) else "☆ ") + tr("Favorite"))
+            dash = self.app.dashboard
+            if dash is not None and dash.winfo_exists():
+                dash.refresh_favorites()
+        except Exception:
+            pass
 
     # ---------- Aufnahme, Export, Import
     def toggle_record(self):
@@ -466,3 +639,41 @@ class MacroPage(ctk.CTkScrollableFrame):
             elif self.plugin.last.startswith("error"):
                 self.status.configure(text=self.plugin.last, text_color=theme.DANGER)
         self.after(300, self._tick)
+
+
+def show_explanation(parent, app, script, cmds):
+    """Fenster 'Was macht dieses Makro?': sofort die Beschreibung in Worten (offline), auf Wunsch zusätzlich die KI. Auch für Marktplatz-Makros."""
+    win = ctk.CTkToplevel(parent, fg_color=theme.c("main"))
+    win.title(tr("What does this macro do?"))
+    win.geometry("560x520")
+    win.after(120, win.lift)
+    ctk.CTkLabel(win, text=tr("Step by step (the macro is only described, nothing is run):"), anchor="w").pack(fill="x", padx=14, pady=(12, 4))
+    box = ctk.CTkTextbox(win, font=ctk.CTkFont(family="Consolas", size=12), height=240)
+    box.pack(fill="both", expand=True, padx=14, pady=6)
+    box.insert("1.0", "\n".join(dsl.describe(cmds)))
+    box.configure(state="disabled")
+    out = ctk.CTkLabel(win, text="", anchor="w", justify="left", wraplength=520)
+    out.pack(fill="x", padx=14, pady=4)
+    btn = ctk.CTkButton(win, text=tr("Explain with AI"), width=160)
+    btn.pack(pady=(2, 12))
+
+    def done(text, ok):
+        if win.winfo_exists():
+            btn.configure(state="normal")
+            out.configure(text=text, text_color=theme.TEXT if ok else theme.DANGER)
+
+    def ask():
+        if not ai_client.available(app):
+            done(tr("The AI needs a cloud account (sign in with a JOPMakro account or Google while the server is set up)."), False)
+            return
+        btn.configure(state="disabled")
+        out.configure(text=tr("Working …"), text_color=theme.TEXT)
+
+        def work():
+            try:
+                text = generator.explain(script, lambda m: ai_client.ask(app, "help", m))
+                app.call_soon(done, text, True)
+            except generator.GenerateError as exc:
+                app.call_soon(done, str(exc), False)
+        threading.Thread(target=work, daemon=True).start()
+    btn.configure(command=ask)

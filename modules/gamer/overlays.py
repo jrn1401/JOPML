@@ -289,3 +289,44 @@ class TextOverlay(_OverlayWindow):
             self.win.after(self.interval, self._refresh)
         except tk.TclError:
             self.win = None
+
+
+class GraphOverlay(_OverlayWindow):
+    """Linie der letzten ~60 Sekunden Ping; rote Striche = verlorene Pakete. Zeigt nur Messungen von PingHistory,
+    keine Bilder pro Sekunde (die Bildrate eines Spiels lässt sich ohne Eingriff ins Spiel nicht messen)."""
+    W, H = 220, 70
+
+    def __init__(self, app, style: OverlayStyle | None, history):
+        super().__init__(app, style or OverlayStyle(font="Segoe UI", size=10, color="#34d399", y=180))
+        self.history = history
+
+    def show(self):
+        self.hide()
+        w = self._open()
+        self.canvas = tk.Canvas(w, width=self.W, height=self.H, bg=BOX if (self.style.background or not self.transparent) else KEY,
+                                highlightthickness=0, bd=0)
+        self.canvas.pack()
+        self._refresh()
+
+    def _refresh(self):
+        if self.win is None:
+            return
+        try:
+            from . import helpers
+            c, st = self.canvas, self.style
+            c.delete("all")
+            segs, lost = helpers.graph_points(self.history.series, self.W, self.H)
+            c.create_rectangle(1, 1, self.W - 1, self.H - 1, outline="#374151")
+            for seg in segs:
+                if len(seg) > 1:
+                    c.create_line(*[v for pt in seg for v in pt], fill=st.color, width=2)
+                elif seg:
+                    c.create_oval(seg[0][0] - 2, seg[0][1] - 2, seg[0][0] + 2, seg[0][1] + 2, fill=st.color, outline=st.color)
+            for x in lost:
+                c.create_line(x, 3, x, self.H - 3, fill="#ef4444")
+            avg = self.history.average()
+            c.create_text(6, 6, anchor="nw", fill="#e5e7eb", font=(st.font, st.size),
+                          text=("Ping " + str(avg) + " ms") if avg is not None else "Ping –")
+            self.win.after(perf.ms(1000), self._refresh)
+        except tk.TclError:
+            self.win = None

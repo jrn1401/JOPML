@@ -26,18 +26,19 @@ BOARD_KINDS = {"Gerade hoch": "recoil_up", "Hoch, dann rechts": "recoil_right", 
 STD_STRENGTH, STD_RATE = 1.0, 10
 
 
-def board_kind(pattern_name: str, shots: int, strength: float, rate: int, guide: bool) -> str:
-    """Name der Bestenliste, in die diese Runde zählt - oder '' (Runde unvollständig, geänderte Stärke/Feuerrate oder Hilfslinie an)."""
-    if guide or shots < SHOTS or abs(float(strength) - STD_STRENGTH) > 0.01 or int(rate) != STD_RATE:
+def board_kind(pattern_name: str, shots: int, strength: float, rate: int, guide: bool, weapon: str = "standard") -> str:
+    """Name der Bestenliste, in die diese Runde zählt - oder '' (andere Waffe als Standard, Runde unvollständig,
+    geänderte Stärke/Feuerrate oder Hilfslinie an)."""
+    if weapon != "standard" or guide or shots < SHOTS or abs(float(strength) - STD_STRENGTH) > 0.01 or int(rate) != STD_RATE:
         return ""
     return BOARD_KINDS.get(pattern_name, "")
 
 
-def pattern(name: str, seed: int = 0) -> list:
+def pattern(name: str, seed: int = 0, shots: int = SHOTS) -> list:
     """Rückstoß je Schuss als (dx, dy) in Pixeln. Negatives dy = nach oben."""
     out = []
     rnd = random.Random(seed)
-    for i in range(SHOTS):
+    for i in range(shots):
         if name == "Gerade hoch":
             out.append((0.0, -8.0 if i < 10 else -4.5))
         elif name == "Hoch, dann rechts":

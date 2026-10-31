@@ -19,21 +19,7 @@ from modules.macros import dsl  # noqa: E402
 # Das Handbuch schickt der Launcher bei jeder Frage mit (core/handbook.py + FAQ); auf dem Server nur eine kurze Rückfallebene.
 manual = ("The manual was not sent by the app. Tell the user to update the launcher to the newest version and ask again; "
           "for anything else point to the Contact page.")
-spec = """Macro language (one command per line, case-insensitive, '#' starts a comment):
-  click [left|right|middle] [X Y]        click (optionally at a position)
-  doubleclick [left|right|middle] [X Y]  double click
-  move X Y                               move the mouse (screen coordinates)
-  key NAME                               press a key (a, 5, f5, space, enter, ctrl, ...)
-  hold NAME DURATION                     hold a key or mouse_left/mouse_right/mouse_middle
-  down NAME / up NAME                    keep a key or mouse button (mouse_left, mouse_right, mouse_middle) pressed / release it
-  type "Text"                            type text
-  scroll N                               scroll (positive = up, negative = down)
-  wait DURATION                          wait (50ms, 1.5s, 2m; no unit = ms); 100ms-300ms = random time in between
-  repeat N | repeat forever   ...   end  repeat (up to 3 levels; 'forever' only outermost)
-  set NAME N / add NAME N                set a variable / increase it by N (name: letters, digits, _; at most 12 variables)
-  if NAME OP N ... [else ...] end        condition (OP: == != < > <= >=); counts towards the nesting depth like loops
-  stop                                   end the macro at this point
-  In type "Text", {NAME} is replaced by the variable's value."""      # Englische Fassung von modules/macros/dsl.py (Modell-Prompt)
+from core.ai_context import MACRO_SPEC as spec  # noqa: E402      # Englische Fassung von modules/macros/dsl.py (Modell-Prompt)
 out = f"""// AUTOMATISCH ERZEUGT von tools/gen_knowledge.py – nicht von Hand ändern.
 export const APP = {json.dumps(f"{APP_NAME} v{APP_VERSION}")};
 export const MANUAL = {json.dumps(manual, ensure_ascii=False)};

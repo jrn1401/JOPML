@@ -11,5 +11,6 @@ args = ["--paths", "."]
 for name in modules.BUILTIN_MODULES:
     args += ["--hidden-import", f"modules.{name}.plugin", "--collect-submodules", f"modules.{name}"]
 args += ["--collect-submodules", "cryptography"]
+args += ["--hidden-import", "arena.ui", "--collect-submodules", "arena", "--hidden-import", "numpy"]   # Recoil Arena steckt in der EXE (--arena)
 args += ["--hidden-import", "modules", "--collect-submodules", "core"]
 print(" ".join(args))

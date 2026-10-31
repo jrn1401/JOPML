@@ -7,7 +7,7 @@ from core.plugin_api import BasePlugin
 from core.hotkey_registry import Entry
 
 from . import helpers, overlays
-from .overlays import KeysOverlay, StatsOverlay, TextOverlay
+from .overlays import GraphOverlay, KeysOverlay, StatsOverlay, TextOverlay
 from .overlaystyle import OverlayStyle
 from .screenshot import RegionSelector, save
 from .timer import SessionTimer
@@ -51,6 +51,7 @@ class Plugin(BasePlugin):
         self.timers_overlay = TextOverlay(self.app, OverlayStyle.from_dict(d.get("timers_style"), y=220, color="#fbbf24"), self._timers_text, 250)
         self.notes_overlay = TextOverlay(self.app, OverlayStyle.from_dict(d.get("notes_style"), y=300, size=12), self._notes_text, 1000)
         self.net_overlay = TextOverlay(self.app, OverlayStyle.from_dict(d.get("net_style"), y=100, size=12), self.pings.text, 1000)
+        self.graph_overlay = GraphOverlay(self.app, OverlayStyle.from_dict(d.get("graph_style"), y=180, size=10, color="#34d399"), self.pings)
         self._net_run = False
         self._hidden_by_toggle: list = []
         self._timer_job = None
@@ -78,7 +79,8 @@ class Plugin(BasePlugin):
 
     def overlay_map(self) -> dict:
         return {"stats": self.stats_overlay, "keys": self.keys_overlay, "match": self.match_overlay,
-                "timers": self.timers_overlay, "notes": self.notes_overlay, "net": self.net_overlay}
+                "timers": self.timers_overlay, "notes": self.notes_overlay, "net": self.net_overlay,
+                "netgraph": self.graph_overlay}
 
     # ---- Texte der Overlays
     def _match_text(self) -> str:
@@ -243,7 +245,7 @@ class Plugin(BasePlugin):
     def show_overlay(self, key: str):
         o = self.overlay_map()[key]
         res = o.show()
-        if key == "net":
+        if key in ("net", "netgraph"):
             self._start_ping_loop()
         if key not in self.overlays_on:
             self.overlays_on.add(key)
@@ -252,7 +254,7 @@ class Plugin(BasePlugin):
 
     def hide_overlay(self, key: str):
         self.overlay_map()[key].hide()
-        if key == "net":
+        if key in ("net", "netgraph") and not (self.net_overlay.active or self.graph_overlay.active):
             self._net_run = False
         if key in self.overlays_on:
             self.overlays_on.discard(key)
@@ -288,7 +290,7 @@ class Plugin(BasePlugin):
                                                    "stats_flags": self.stats_overlay.show_flags,
                                                    "match": self.match.to_dict(), "timers": self.timers.to_list(), "notes": self.notes.to_dict(),
                                                    "match_style": self.match_overlay.style.to_dict(), "timers_style": self.timers_overlay.style.to_dict(),
-                                                   "notes_style": self.notes_overlay.style.to_dict(), "net_style": self.net_overlay.style.to_dict(),
+                                                   "notes_style": self.notes_overlay.style.to_dict(), "net_style": self.net_overlay.style.to_dict(), "graph_style": self.graph_overlay.style.to_dict(),
                                                    "ping_host": self.ping_host, "streamer_mode": self.streamer_mode,
                                                    "overlays_on": sorted(self.overlays_on), "match_auto": self.auto.to_dict()})
 

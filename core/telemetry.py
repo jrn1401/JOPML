@@ -1,5 +1,5 @@
 """Anonyme Diagnose für Cloud-Konten: ein Lebenszeichen pro Minute (wer ist online) und Fehlerberichte für das Admin-Modul.
-Es werden nur Version, Betriebssystem, aktuelle Seite und Fehlertexte gesendet – keine Eingaben, Makros oder Nachrichten.
+Es werden nur Version, Betriebssystem, aktuelle Seite, Fehlercode und Fehlertexte gesendet – keine Eingaben, Makros oder Nachrichten.
 Abschaltbar unter Einstellungen > System (diagnostics)."""
 import os
 import platform
@@ -33,6 +33,7 @@ class Telemetry:
         self._stop = threading.Event()
         self._t = None
         self._os = f"{platform.system()} {platform.release()}"[:40]
+        self._seen: set = set()
 
     # ---- Aufrufe
     def enabled(self) -> bool:
@@ -48,17 +49,48 @@ class Telemetry:
     def stop(self):
         self._stop.set()
 
-    def report(self, kind: str, message: str, trace: str = "") -> None:
+    def context(self, force: bool = False) -> str | None:
+        """Optionaler, kurzer Kontext: aktuelle Seite und die letzten besuchten Seiten (nur Seitennamen, keine Eingaben).
+        Nur wenn der Nutzer "Kontext mitsenden" eingeschaltet hat (oder er es für eine Meldung ausdrücklich ankreuzt)."""
+        if not force and not (self.enabled() and self.app.settings.get("diagnostics_context", False)):
+            return None
+        trail = [str(x) for x in list(getattr(self.app, "trail", []))[-6:]]
+        return scrub(f"page={getattr(self.app, 'current', '') or '-'}; trail={'>'.join(trail) or '-'}")[:300]
+
+    def report(self, kind: str, message: str, trace: str = "", code: str | None = None) -> None:
+        """Automatische Meldung (mit Fehlercode). Gleiche Meldungen werden pro Programmstart nur einmal gesendet; der Server fasst sie zusätzlich zusammen."""
         if not self.enabled():
             return
+        msg = scrub(message)[:500]
+        key = (code, kind, re.sub(r"\d+", "#", msg)[:120])
+        if key in self._seen or len(self._seen) >= 200:
+            return
+        self._seen.add(key)
         try:
-            self._q.put_nowait((kind, scrub(message)[:500], scrub(trace)[:4000]))
+            self._q.put_nowait((kind, msg, scrub(trace)[:4000], code, self.context()))
         except queue.Full:
             pass
 
+    def report_user(self, category: str, message: str, code: str | None = None, with_context: bool = False) -> None:
+        """Meldung eines Nutzers (Knopf "Report"): sofort, blockierend, unabhängig vom Diagnose-Schalter, weil der Nutzer sie selbst abschickt.
+        Wirft eine Exception mit verständlichem Text, wenn das Senden scheitert."""
+        text = scrub(message).strip()
+        if len(text) < 5:
+            raise ValueError("Please describe the problem in a few words.")
+        self._call("jopml_user_report", {"p_category": category, "p_message": text[:2000], "p_code": code,
+                                         "p_version": APP_VERSION, "p_os": self._os, "p_context": self.context(True) if with_context else None})
+
+    def my_reports(self) -> list:
+        """Eigene Meldungen mit Ticket-Status und Antworten des Betreibers (blockierend)."""
+        res = self._call("jopml_my_reports", {})
+        return res if isinstance(res, list) else []
+
+    def reports_seen(self) -> None:
+        self._call("jopml_my_reports_seen", {})
+
     def report_exc(self, kind, exc_type, exc, tb) -> None:
         text = "".join(traceback.format_exception(exc_type, exc, tb))
-        self.report(kind, f"{getattr(exc_type, '__name__', 'Error')}: {exc}", text)
+        self.report(kind, f"{getattr(exc_type, '__name__', 'Error')}: {exc}", text, "E-APP-001")
 
     def install_hooks(self):
         if Telemetry._hooked:                     # nur einmal einhängen (sonst verketten sich die Hooks)
@@ -96,12 +128,12 @@ class Telemetry:
         """Sendet wartende Fehlerberichte (blockierend; im Hintergrund-Thread)."""
         while True:
             try:
-                kind, msg, trace = self._q.get_nowait()
+                kind, msg, trace, code, ctx = self._q.get_nowait()
             except queue.Empty:
                 return
             try:
-                self._call("jopml_log_error", {"p_kind": kind, "p_message": msg, "p_trace": trace,
-                                               "p_version": APP_VERSION, "p_os": self._os})
+                self._call("jopml_report_error", {"p_code": code, "p_kind": kind, "p_message": msg, "p_trace": trace,
+                                                  "p_version": APP_VERSION, "p_os": self._os, "p_context": ctx})
             except Exception:
                 return
 

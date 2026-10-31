@@ -8,8 +8,26 @@ MAX_DIM = 80
 HEIGHTS = {"Small": 90, "Medium": 140, "Large": 220}
 
 
+# Standard-Reihenfolge: die meistgenutzten Module zuerst, danach der Rest in Programmreihenfolge, eigene Module am Ende.
+PRIORITY = ["macros", "autoclicker", "gamer", "gamemacros", "cheatmenu", "arena", "aichat", "clicktools", "community",
+            "productivity", "luascripts", "modmanager"]
+
+
+def by_priority(ids: list[str]) -> list[str]:
+    rank = {k: n for n, k in enumerate(PRIORITY)}
+    return sorted(ids, key=lambda i: (rank.get(i, len(PRIORITY)), ids.index(i)))
+
+
+def move_to_top(ids: list[str], order, pid: str) -> list[str]:
+    cur = normalize_order(ids, order)
+    if pid in cur:
+        cur.remove(pid)
+        cur.insert(0, pid)
+    return cur
+
+
 def normalize_order(ids: list[str], order) -> list[str]:
-    """Gespeicherte Reihenfolge übernehmen, Unbekanntes verwerfen, neue Module hinten anfügen."""
+    """Gespeicherte Reihenfolge übernehmen, Unbekanntes verwerfen, neue Module nach Wichtigkeit hinten anfügen."""
     ids = [i for i in ids if i not in FIXED]
     saved = [i for i in (order if isinstance(order, list) else []) if isinstance(i, str)]
     out, seen = [], set()
@@ -17,7 +35,7 @@ def normalize_order(ids: list[str], order) -> list[str]:
         if i in ids and i not in seen:
             out.append(i)
             seen.add(i)
-    out.extend(i for i in ids if i not in seen)
+    out.extend(i for i in by_priority(ids) if i not in seen)
     return out
 
 

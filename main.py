@@ -74,6 +74,14 @@ if __name__ == "__main__":
         from core.version import APP_VERSION
         Path(sys.argv[2]).write_text(APP_VERSION, encoding="utf-8")
         sys.exit(0)
+    if len(sys.argv) >= 2 and sys.argv[1] == "--arena":        # die in die EXE eingebaute Recoil Arena (eigenes Fenster, eigener Prozess)
+        try:
+            from arena.ui import main as _arena_main
+            _arena_main()
+        except Exception:
+            _report_crash(traceback.format_exc())
+            sys.exit(1)
+        sys.exit(0)
     if len(sys.argv) >= 3 and sys.argv[1] == "--selftest":
         sys.exit(_selftest(sys.argv[2]))
     _enable_fault_log()

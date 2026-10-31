@@ -20,8 +20,15 @@ from core.version import (AI_FUNCTION, APP_ID, APP_VERSION, OAUTH_LOOPBACK_PORT,
                           SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL)
 
 
+CHAT_FUNCTION = "jopml-chat"
+
+
 class CloudError(Exception):
-    """Fehlertext darf dem Nutzer angezeigt werden."""
+    """Fehlertext darf dem Nutzer angezeigt werden. `code` ist ein kurzer Serverschlüssel (z. B. "limit_tokens"), falls vorhanden."""
+
+    def __init__(self, msg="", code=None):
+        super().__init__(msg)
+        self.code = code
 
 
 # Admin-Meldungen (nur im Modul "Publish" sichtbar, deshalb nur Deutsch)
@@ -41,6 +48,7 @@ class CloudClient:
         self.url = (url or "").rstrip("/")
         self.key = key or ""
         self.session: dict | None = None      # access_token, refresh_token, expires_at
+        self.on_session = None                # Rückruf nach jeder neuen Sitzung/Token-Erneuerung (speichert den rotierten Token)
 
     @property
     def configured(self) -> bool:
@@ -62,7 +70,8 @@ class CloudClient:
             except Exception:
                 err = {}
             msg = err.get("error_description") or err.get("msg") or err.get("message") or err.get("error") or ""
-            raise CloudError(self._friendly(str(msg), exc.code)) from None
+            code = err.get("code") if isinstance(err.get("code"), str) else None
+            raise CloudError(self._friendly(str(msg), exc.code), code) from None
         except (urllib.error.URLError, OSError) as exc:
             raise CloudError(f"No connection to the server: {exc}") from None
         if not raw.strip():
@@ -97,6 +106,11 @@ class CloudClient:
         expires = data.get("expires_at") or (int(time.time()) + int(data.get("expires_in", 3600)))
         self.session = {"access_token": data["access_token"], "refresh_token": data.get("refresh_token", ""),
                         "expires_at": int(expires)}
+        if self.on_session:
+            try:
+                self.on_session(self.session)
+            except Exception:
+                pass
         return self.session
 
     def token(self) -> str:
@@ -185,9 +199,9 @@ class CloudClient:
     def public_release_url(self, name: str) -> str:
         return f"{self.url}/storage/v1/object/public/releases/{urllib.parse.quote(name)}"
 
-    def read_manifest(self) -> dict | None:
+    def read_manifest(self, name: str = "version.json") -> dict | None:
         try:
-            req = urllib.request.Request(self.public_release_url("version.json"), headers={"User-Agent": f"{APP_ID}/{APP_VERSION}"})
+            req = urllib.request.Request(self.public_release_url(name), headers={"User-Agent": f"{APP_ID}/{APP_VERSION}"})
             with net.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read(1_000_000).decode("utf-8"))
             return data if isinstance(data, dict) else None
@@ -298,3 +312,81 @@ class CloudClient:
         if not isinstance(reply, str) or not reply.strip():
             raise CloudError((data or {}).get("error", "Empty answer from the AI.") if isinstance(data, dict) else "Empty answer.")
         return reply.strip()
+
+    # ---------- KI-Chat (Edge Function jopml-chat: Gemini und Groq) ----------
+    def _chat_call(self, body: dict, timeout: float = 75) -> dict:
+        data = self._request("POST", f"/functions/v1/{CHAT_FUNCTION}", body, token=self.token(), timeout=timeout)
+        if not isinstance(data, dict):
+            raise CloudError("Unexpected answer from the server.")
+        return data
+
+    def chat_status(self) -> dict:
+        """{"providers": [...], "models": {anbieter: standardmodell}, "policy": {max_answer, daily_tokens, tokens_used, daily_requests}}"""
+        return self._chat_call({"kind": "status"}, 25)
+
+    def chat_models(self) -> dict:
+        """{"providers": [...], "models": {anbieter: [modelle]}, "defaults": {...}}"""
+        return self._chat_call({"kind": "models"}, 30)
+
+    def chat(self, provider: str, messages: list[dict], lang: str, context: str = "", model: str | None = None) -> dict:
+        body = {"provider": provider, "messages": messages, "lang": lang, "context": context}
+        if model:
+            body["model"] = model
+        data = self._chat_call(body)
+        if not isinstance(data.get("reply"), str) or not data["reply"].strip():
+            raise CloudError(str(data.get("error") or "Empty answer from the AI."), data.get("code"))
+        return data
+
+    def analyze_errors(self, text: str, lang: str = "de", provider: str = "gemini") -> dict:
+        """Nur Admins: lässt die KI zusammengefasste Fehlergruppen auswerten."""
+        return self._chat_call({"kind": "analyze", "provider": provider, "lang": lang, "context": text[:12000],
+                                "messages": [{"role": "user", "content": "Analyse the error groups."}]}, 90)
+
+    def chat_stream(self, provider: str, messages: list[dict], lang: str, context: str = "", model: str | None = None,
+                    on_text=None, cancel=None, on_start=None, fallback: bool = True) -> dict:
+        """Chat-Antwort Stück für Stück. on_text(bisheriger_Text) wird mehrfach gerufen, `cancel` ist ein threading.Event (gesetzt = abbrechen),
+        on_start(provider, model, fallback_from) kommt, sobald der Server antwortet. Ergebnis: {"reply", "provider", "model", "tokens",
+        "fallback_from", "fallback_reason", "cancelled"}. Wirft CloudError (mit .code)."""
+        import codecs
+        body = {"provider": provider, "messages": messages, "lang": lang, "context": context, "stream": True, "fallback": bool(fallback)}
+        if model:
+            body["model"] = model
+        headers = {"apikey": self.key, "Content-Type": "application/json", "Authorization": f"Bearer {self.token()}",
+                   "User-Agent": f"{APP_ID}/{APP_VERSION}"}
+        req = urllib.request.Request(f"{self.url}/functions/v1/{CHAT_FUNCTION}", data=json.dumps(body).encode("utf-8"), method="POST", headers=headers)
+        mark, text, cancelled = "\x1eMETA", "", False
+        try:
+            with net.urlopen(req, timeout=90) as resp:
+                if on_start:
+                    on_start(resp.headers.get("X-Provider") or provider, resp.headers.get("X-Model") or model or "", resp.headers.get("X-Fallback-From") or "")
+                dec = codecs.getincrementaldecoder("utf-8")("replace")
+                while True:
+                    if cancel is not None and cancel.is_set():
+                        cancelled = True
+                        break
+                    chunk = resp.read1(4096) if hasattr(resp, "read1") else resp.read(512)
+                    if not chunk:
+                        break
+                    text += dec.decode(chunk)
+                    if on_text:
+                        on_text(text.split(mark, 1)[0])
+                if not cancelled:
+                    text += dec.decode(b"", final=True)
+        except urllib.error.HTTPError as exc:
+            try:
+                err = json.loads(exc.read().decode("utf-8"))
+            except Exception:
+                err = {}
+            raise CloudError(self._friendly(str(err.get("error", "")), exc.code), err.get("code") if isinstance(err.get("code"), str) else None) from None
+        except (urllib.error.URLError, OSError) as exc:
+            raise CloudError(f"No connection to the server: {exc}") from None
+        reply, _, meta_raw = text.partition(mark)
+        try:
+            meta = json.loads(meta_raw) if meta_raw else {}
+        except ValueError:
+            meta = {}
+        reply = reply.strip()
+        if not reply and not cancelled:
+            raise CloudError("Empty answer from the AI.", "empty")
+        return {"reply": reply, "provider": meta.get("provider") or provider, "model": meta.get("model") or model or "", "tokens": int(meta.get("tokens") or 0),
+                "fallback_from": meta.get("fallback_from"), "fallback_reason": meta.get("fallback_reason"), "cancelled": cancelled}

@@ -96,7 +96,7 @@ class Plugin(BasePlugin):
         return n, text
 
     # ---- Ausführen
-    def run(self, text: str, backend=None) -> str:
+    def run(self, text: str, backend=None, debug_delay: float = 0.0, on_trace=None) -> str:
         """Gibt '' bei Erfolg oder eine Fehlermeldung zurück."""
         if self.state == "running":
             return ""
@@ -109,6 +109,9 @@ class Plugin(BasePlugin):
             return f"{type(exc).__name__}: {exc}"
         self.current_text = text
         self.runner = dsl.Runner(backend)
+        if on_trace is not None:                        # Fehlersuche: aktuelle Zeile, Schleifenzähler, Variablen
+            self.runner.trace = on_trace
+            self.runner.step_delay = max(0.0, float(debug_delay))
         self.state, self.last = "running", ""
 
         def work():
@@ -125,6 +128,38 @@ class Plugin(BasePlugin):
 
         threading.Thread(target=work, daemon=True).start()
         return ""
+
+    # ---- Favoriten (Dashboard)
+    def favorites(self) -> list[str]:
+        """Favoriten, die es noch gibt (gelöschte Makros fallen still heraus)."""
+        have = set(self.list_macros())
+        favs = self.app.settings.get("macro_favorites")
+        return [n for n in (favs if isinstance(favs, list) else []) if isinstance(n, str) and n in have]
+
+    def is_favorite(self, name: str) -> bool:
+        return name in self.favorites()
+
+    def toggle_favorite(self, name: str) -> bool:
+        """Gibt True zurück, wenn das Makro danach Favorit ist."""
+        name = (name or "").strip()
+        if name not in self.list_macros():
+            raise ValueError("Save the macro first.")
+        favs = self.favorites()
+        if name in favs:
+            favs.remove(name)
+        else:
+            favs.append(name)
+        self.app.settings["macro_favorites"] = favs
+        self.app.save_settings()
+        return name in favs
+
+    def run_saved(self, name: str, backend=None) -> str:
+        """Startet ein gespeichertes Makro (Dashboard-Knopf). Gibt '' oder eine Fehlermeldung zurück."""
+        try:
+            text = self.load(name)
+        except (OSError, ValueError):
+            return "This macro could not be opened."
+        return self.run(text, backend=backend)
 
     def stop(self):
         if self.runner:

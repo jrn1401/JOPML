@@ -139,19 +139,22 @@ def _apply_windows_exe(path: Path) -> None:
         "@echo off\r\n"
         "set /a n=0\r\n"
         ":retry\r\n"
-        "timeout /t 1 /nobreak >nul\r\n"
+        "ping -n 2 127.0.0.1 >nul\r\n"
         f'move /y "{path}" "{exe}" >nul 2>&1\r\n'
         "if errorlevel 1 (\r\n"
         "  set /a n+=1\r\n"
         "  if %n% lss 30 goto retry\r\n"
         "  exit /b 1\r\n"
         ")\r\n"
+        "set _MEIPASS2=\r\n"
+        "set PYINSTALLER_RESET_ENVIRONMENT=1\r\n"
         f'start "" "{exe}"\r\n'
         'del "%~f0"\r\n',
         encoding="utf-8",
     )
-    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
-    subprocess.Popen(["cmd", "/c", str(bat)], creationflags=flags, close_fds=True)
+    from core import relaunch
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    subprocess.Popen(["cmd", "/c", str(bat)], creationflags=flags, close_fds=True, env=relaunch.clean_env())
 
 
 def apply(path: Path) -> bool:
@@ -159,7 +162,8 @@ def apply(path: Path) -> bool:
     key = platform_key()
     if key == "source":
         _apply_source_zip(path)
-        subprocess.Popen([sys.executable, *sys.argv], cwd=str(APP_ROOT))
+        from core import relaunch
+        subprocess.Popen([sys.executable, *sys.argv], cwd=str(APP_ROOT), env=relaunch.clean_env())
         return True
     if key == "windows":
         _apply_windows_exe(path)

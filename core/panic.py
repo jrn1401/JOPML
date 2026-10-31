@@ -6,6 +6,29 @@ from core import config
 DEFAULT = "<ctrl>+<shift>+<f12>"
 
 
+def active(app) -> list[str]:
+    """IDs der Module, bei denen gerade etwas läuft (ohne etwas zu stoppen) - für den Mini-Modus."""
+    out = []
+    for p in getattr(app, "plugins", []):
+        try:
+            if p.id == "autoclicker":
+                on = p.engine is not None and p.engine.running
+            elif p.id == "clicktools":
+                mk = getattr(p, "mk", None)
+                on = mk is not None and bool(mk.holding or mk.scrolling or mk.afk_running)
+            elif p.id == "luascripts":
+                on = bool(getattr(p, "running", False))
+            elif p.id == "macros":
+                on = getattr(p, "state", "") == "running"
+            else:
+                on = False
+            if on:
+                out.append(p.id)
+        except Exception:
+            pass
+    return out
+
+
 def stop_everything(app) -> list[str]:
     """Stoppt alle Module, die etwas tun. Gibt die IDs der Module zurück, bei denen etwas lief."""
     stopped = []

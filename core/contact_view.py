@@ -58,7 +58,8 @@ class ContactView(ctk.CTkScrollableFrame):
         self.columnconfigure(0, weight=1)
         ctk.CTkLabel(self, text=tr("Contact & feedback"), font=ctk.CTkFont(size=26, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=24, pady=(20, 4))
-        ctk.CTkLabel(self, text=tr("Praise, bugs, ideas or questions: write to us!"), text_color=theme.MUTED).grid(
+        ctk.CTkLabel(self, text=tr("Praise, ideas or questions: write to us! Something not working? Use the Report button instead: it sends the error code, "
+                                   "you can follow the status and you get an answer there."), text_color=theme.MUTED, wraplength=720, justify="left").grid(
             row=1, column=0, sticky="w", padx=24)
 
         card = ctk.CTkFrame(self, fg_color=theme.c("card"), corner_radius=theme.CARD_RADIUS, border_width=1, border_color=theme.c("hover"))

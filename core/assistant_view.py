@@ -3,7 +3,7 @@ import threading
 
 import customtkinter as ctk
 
-from core import ai_client, assistant, theme, ui
+from core import ai_client, assistant, assistant_chips, theme, ui
 from core.i18n import tr
 from core.version import ASSISTANT_URL
 
@@ -26,12 +26,22 @@ class AssistantView(ctk.CTkFrame):
         ctk.CTkLabel(head, text=tr("Help assistant"), font=ctk.CTkFont(size=26, weight="bold")).pack(anchor="w")
         ai_on = ai_client.available(app) or bool(self.url)
         ctk.CTkLabel(head, text=tr("AI-powered") if ai_on else tr("Offline help (FAQ)"), text_color=theme.MUTED).pack(anchor="w")
+        links = ctk.CTkFrame(head, fg_color="transparent")
+        links.pack(anchor="w", pady=(4, 0))
+        ctk.CTkButton(links, text="📖  " + tr("Error codes"), width=130, height=26, fg_color=theme.c("hover"), text_color=theme.TEXT,
+                      command=lambda: app.show("errorcodes")).pack(side="left", padx=(0, 6))
+        if "aichat" in app.plugin_by_id:
+            ctk.CTkButton(links, text="🤖  " + tr("To write macros or modules, open the AI Chat"), height=26, fg_color=theme.c("hover"), text_color=theme.TEXT,
+                          command=lambda: app.show("aichat")).pack(side="left")
 
         self.chat = ctk.CTkScrollableFrame(self, fg_color=theme.c("card"), corner_radius=theme.CARD_RADIUS, border_width=1, border_color=theme.c("hover"))
         self.chat.grid(row=1, column=0, sticky="nsew", padx=24, pady=6)
 
+        self.chips = ctk.CTkFrame(self, fg_color="transparent")
+        self.chips.grid(row=2, column=0, sticky="ew", padx=24, pady=(0, 0))
+        self.show_chips()
         bar = ctk.CTkFrame(self, fg_color="transparent")
-        bar.grid(row=2, column=0, sticky="ew", padx=24, pady=(6, 20))
+        bar.grid(row=3, column=0, sticky="ew", padx=24, pady=(6, 20))
         bar.grid_columnconfigure(0, weight=1)
         self.entry = ctk.CTkEntry(bar, placeholder_text=tr("Type a question and press Enter …"), height=38)
         self.entry.grid(row=0, column=0, sticky="ew")
@@ -39,6 +49,19 @@ class AssistantView(ctk.CTkFrame):
         self.btn = ctk.CTkButton(bar, text=tr("Send"), width=100, height=38, command=self.send)
         self.btn.grid(row=0, column=1, padx=(8, 0))
         self._bubble(tr(GREETING), mine=False)
+
+    def show_chips(self):
+        """Schnellfragen passend zur Seite, von der man kommt (jedes Mal neu, wenn der Assistent geöffnet wird)."""
+        for w in self.chips.winfo_children():
+            w.destroy()
+        for q in assistant_chips.for_page(getattr(self.app, "previous", None)):
+            ctk.CTkButton(self.chips, text=tr(q), height=26, width=10, fg_color=theme.c("hover"), text_color=theme.TEXT,
+                          command=lambda q=q: self.ask(tr(q))).pack(side="left", padx=(0, 6), pady=2)
+
+    def ask(self, text):
+        self.entry.delete(0, "end")
+        self.entry.insert(0, text)
+        self.send()
 
     def _bubble(self, text, mine):
         row = ctk.CTkFrame(self.chat, fg_color="transparent")

@@ -81,8 +81,23 @@ FAQ = [
     (("modul importieren", "module importieren", "import module", "eigenes modul", "own module", "plugin importieren", "modul hinzufügen"),
      "Under Settings → System → Import modules you can add your own module from a folder, a .zip file, a single .py file or by pasting code (it needs a plugin.py with a class Plugin). "
      "A module is program code with all rights of the program, so import only modules you trust. It is loaded at the next start, stays when the program is updated and can be removed in the same place."),
+    (("ki chat", "ai chat", "chatgpt", "claude", "gemini", "groq", "chatten", "openai", "anthropic", "modell wählen", "choose model"),
+     "Open the menu item 'AI Chat' (or type your wish into the big assistant on the Dashboard), pick Gemini or Groq and a model in the model menu, and write your message. "
+     "You confirm a data notice for each AI once. Claude and ChatGPT are no longer offered. Answers are labelled AI-generated. Chats are saved on your PC only if you switch it on under 'Chats'."),
+    (("vorlage", "template", "timer modul", "notizen modul", "mit ki beheben", "fix with ai", "modul reparieren", "repair module", "verlauf modul", "module history", "rückgängig", "undo module", "diff"),
+     "In the AI Chat press 'Templates' for ready modules (Timer, Notes, Hotkey counter, Text snippets): add them or let the AI change them. For a module that does not work, open Modules, select it "
+     "and press 'Fix with AI': you see exactly which lines change and accept with one click. 'History' in the same place brings back an older version."),
+    (("chatverlauf", "chat history", "chats speichern", "save chats", "projekt chat", "streaming", "abbrechen", "stop button", "andere ki", "switch to the other ai", "limit erreicht gemini"),
+     "Under 'Chats' in the AI Chat you can save chats on this PC (encrypted, off by default) and open or delete them; 'Project' keeps chats per module. 'Stop' cancels an answer. "
+     "If your AI reaches its limit, the other one answers and you are told (only if you consented to both)."),
+    (("meine meldungen", "my reports", "antwort auf meldung", "ticket", "status meldung"),
+     "Press 'Report' in the sidebar, then 'My reports': you see whether your report was received, is being worked on or is fixed, and answers from the operator."),
+    (("fehlercode", "error code", "e-net", "e-mod", "e-ai", "e-upd", "ki fragen", "ask ai", "melden", "report button"),
+     "Every error shows a code like E-MOD-005 and a solution. All codes are listed under Help assistant > 'Error codes'. In the error window press 'Ask AI' for an explanation or 'Report' to tell the operator; you can also use the 'Report' button in the sidebar any time for problems and ideas."),
+    (("modul anforderungen", "module requirements", "anforderungen", "welche dateien", "upload kriterien", "upload criteria", "modul regeln", "module rules"),
+     "Open 'Modules' and press 'View module requirements': it shows the exact rules for modules, Lua scripts, shared modules and macros (file types, sizes, number of files, forbidden content) and can save them as a file. It always matches your program version."),
     (("kontakt", "contact", "feedback", "fehler melden", "bug", "idee", "idea", "vorschlag"),
-     "Send feedback and bug reports through 'Contact' in the sidebar."),
+     "Praise, ideas and questions go through 'Contact'. Something not working? Use 'Report' in the sidebar (you can follow it under 'My reports')."),
 ]
 
 FALLBACK = ("I have no matching answer for that. Try other keywords (e.g. 'hotkey', 'profile', 'update') or write to us via 'Contact'.")

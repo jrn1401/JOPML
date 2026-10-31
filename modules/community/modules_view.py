@@ -174,13 +174,13 @@ class ModulesView(ctk.CTkFrame):
     def share(self):
         installed = module_import.installed()
         if not installed:
-            dialogs.info("Share a module", "You have no imported modules yet. Add one in Settings > System > Import modules first.")
+            dialogs.info("Share a module", "You have no imported modules yet. Add one in the menu item Modules first.")
             return
         top = ctk.CTkToplevel(self, fg_color=theme.c("main"))
         top.title(tr("Share a module"))
         top.geometry("560x600")
         top.after(120, top.lift)
-        ctk.CTkLabel(top, text=tr("Module (from Settings > System > Import modules)"), anchor="w").pack(fill="x", padx=16, pady=(14, 0))
+        ctk.CTkLabel(top, text=tr("Module (from the menu item Modules)"), anchor="w").pack(fill="x", padx=16, pady=(14, 0))
         pick = ctk.CTkOptionMenu(top, values=installed, width=260)
         pick.pack(anchor="w", padx=16)
         ctk.CTkLabel(top, text=tr("Title"), anchor="w").pack(fill="x", padx=16, pady=(8, 0))

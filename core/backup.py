@@ -9,7 +9,7 @@ from core.version import APP_VERSION
 FORMAT = "jopml-backup"
 # Gerätespezifisches bleibt draußen (Pfade, Zustimmungen, Anmelde-Voreinstellung)
 EXCLUDE = {"bg_image", "icon_image", "first_run_done", "legal_version", "legal_hash", "legal_accepted_at", "remember",
-           "assistant_url", "contact_endpoint", "ui_scale"}
+           "assistant_url", "contact_endpoint", "ui_scale", "auto_backup_last"}
 EXTS = {".json", ".jopm"}
 MAX_FILES, MAX_BYTES = 300, 200_000
 _SAFE = re.compile(r"^[\w\- .]{1,80}$", re.U)
@@ -67,3 +67,44 @@ def restore(data, apply_settings: bool = True) -> dict:
         (root / target).write_text(text, encoding="utf-8")
         res["files"] += 1
     return res
+
+
+# ---- Automatische Sicherung -------------------------------------------------
+KEEP_AUTO = 5
+AUTO_CHOICES = {"Off": 0, "Daily": 1, "Weekly": 7, "Monthly": 30}
+
+
+def auto_dir() -> Path:
+    d = config.app_dir() / "backups"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def auto_due(settings: dict, today=None) -> bool:
+    import datetime
+    days = settings.get("auto_backup_days", 0)
+    if not isinstance(days, int) or days <= 0:
+        return False
+    today = today or datetime.date.today()
+    try:
+        last = datetime.date.fromisoformat(str(settings.get("auto_backup_last", "")))
+    except ValueError:
+        return True
+    return (today - last).days >= days
+
+
+def run_auto(settings: dict, today=None) -> Path | None:
+    """Schreibt backups/jopml-auto-JJJJ-MM-TT.json, wenn fällig, und behält nur die letzten KEEP_AUTO. Gibt den Pfad oder None zurück."""
+    import datetime
+    if not auto_due(settings, today):
+        return None
+    today = today or datetime.date.today()
+    target = auto_dir() / f"jopml-auto-{today.isoformat()}.json"
+    target.write_text(json.dumps(build(), ensure_ascii=False, indent=1), encoding="utf-8")
+    for old in sorted(auto_dir().glob("jopml-auto-*.json"))[:-KEEP_AUTO]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    settings["auto_backup_last"] = today.isoformat()
+    return target

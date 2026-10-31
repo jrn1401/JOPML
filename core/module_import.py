@@ -280,3 +280,96 @@ def remove_lua(name: str, root: Path | None = None) -> bool:
         p.unlink()
         return True
     return False
+
+
+# ---------------------------------------------------------------- Schutz bei Updates
+def snapshot(root: Path | None = None) -> Path | None:
+    """Kopie der eigenen Module vor einem Update (liegen sonst schon außerhalb des Programmordners und bleiben erhalten)."""
+    root = root or user_dir()
+    names = installed(root)
+    if not names:
+        return None
+    dest = root.parent / "user_modules_backup"
+    shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(root, dest, ignore=shutil.ignore_patterns("__pycache__"))
+    return dest
+
+
+def restore_if_missing(root: Path | None = None) -> list[str]:
+    """Fehlt nach einem Update ein gesichertes Modul, wird es zurückgeholt. Gibt die Namen der zurückgeholten Module zurück."""
+    root = root or user_dir()
+    src = root.parent / "user_modules_backup"
+    if not src.is_dir():
+        return []
+    back = []
+    for name in installed(src):
+        if not (root / name / "plugin.py").is_file():
+            shutil.rmtree(root / name, ignore_errors=True)
+            shutil.copytree(src / name, root / name)
+            back.append(name)
+    return back
+
+
+# ---------------------------------------------------------------- Sandbox-Prüfung (statisch)
+# Kein echter Schutz: ein Modul läuft mit allen Rechten des Programms. Die Prüfung zeigt nur vor dem Hinzufügen, was der Code offenbar tut.
+RISKS = {
+    "network": ("Network access", {"socket", "urllib", "http", "requests", "ftplib", "smtplib", "websocket", "websockets", "httpx", "aiohttp"}),
+    "programs": ("Starting other programs", {"subprocess", "pty"}),
+    "native": ("Native code / system calls", {"ctypes", "winreg", "cffi"}),
+    "serialize": ("Loading pickled data", {"pickle", "marshal", "shelve"}),
+}
+RISK_CALLS = {"eval": "dynamic", "exec": "dynamic", "compile": "dynamic", "__import__": "dynamic", "system": "programs", "popen": "programs",
+              "rmtree": "files", "remove": "files", "unlink": "files", "rmdir": "files"}
+RISK_TEXT = {"dynamic": "Running code built at runtime (eval/exec)", "files": "Deleting files or folders"}
+
+
+def scan_code(code: str) -> list[str]:
+    """Liste verständlicher Hinweise (Englisch, mit tr() anzeigen). Leer = nichts Auffälliges. Unlesbarer Code ergibt einen Hinweis."""
+    import ast
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError):
+        return ["The code could not be read for the check."]
+    found = set()
+    for node in ast.walk(tree):
+        mods = []
+        if isinstance(node, ast.Import):
+            mods = [a.name.split(".")[0] for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            mods = [node.module.split(".")[0]]
+        for m in mods:
+            for key, (_text, names) in RISKS.items():
+                if m in names:
+                    found.add(key)
+        if isinstance(node, ast.Call):
+            f = node.func
+            nm = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
+            if nm in RISK_CALLS:
+                found.add(RISK_CALLS[nm])
+    texts = {**{k: v[0] for k, v in RISKS.items()}, **RISK_TEXT}
+    return [texts[k] for k in sorted(found)]
+
+
+def scan_path(path) -> list[str]:
+    """Prüft eine .py-Datei, einen Ordner oder eine ZIP (nur .py-Dateien, begrenzt gelesen)."""
+    import zipfile
+    p = Path(path)
+    codes = []
+    try:
+        if p.is_dir():
+            codes = [f.read_text(encoding="utf-8", errors="replace") for f in list(p.rglob("*.py"))[:200]]
+        elif p.suffix.lower() == ".zip":
+            with zipfile.ZipFile(p) as zf:
+                for i in zf.infolist()[:400]:
+                    if i.filename.endswith(".py") and i.file_size < MAX_FILE_BYTES:
+                        codes.append(zf.read(i).decode("utf-8", errors="replace"))
+        elif p.suffix.lower() == ".py":
+            codes = [p.read_text(encoding="utf-8", errors="replace")]
+    except (OSError, zipfile.BadZipFile):
+        return []
+    out = []
+    for c in codes:
+        for f in scan_code(c):
+            if f not in out:
+                out.append(f)
+    return out

@@ -71,6 +71,14 @@ class CloudIdentity:
         self.client = client
         self.session_path = app_dir() / "session_cloud.json"
         self._kind = "password"
+        client.on_session = self._persist_token
+
+    def _persist_token(self, session: dict) -> None:
+        """Der Server tauscht den Erneuerungs-Token bei jeder Erneuerung aus. Ohne Speichern wäre der gemerkte Token nach einer Stunde
+        ungültig und ein Neustart würde abmelden."""
+        s = load_json(self.session_path)
+        if isinstance(s, dict) and s.get("refresh_token") and session.get("refresh_token"):
+            save_json(self.session_path, {**s, "refresh_token": session["refresh_token"]})
 
     # ---- Hilfen
     def _user(self, prof: dict, kind: str) -> dict:

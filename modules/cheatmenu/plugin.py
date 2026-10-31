@@ -11,7 +11,7 @@ from core.i18n import tr
 from core.plugin_api import BasePlugin
 
 GROUP = "Cheat menu"
-DEFAULTS = {"delay": 3, "chat_key": "t", "console": "auto", "recoil_best": {}}
+DEFAULTS = {"delay": 3, "chat_key": "t", "console": "auto", "recoil_best": {}, "recoil3d_best": {}, "recoil_history": [], "trainer_prefs": {}}
 
 
 class Plugin(BasePlugin):

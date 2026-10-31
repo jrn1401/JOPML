@@ -9,7 +9,7 @@ import hashlib
 LEGAL_DE = r"""
 NUTZUNGSBEDINGUNGEN, HAFTUNGSAUSSCHLUSS UND DATENSCHUTZHINWEISE
 für das Programm „Jaron's OP Makro Launcher“ (nachfolgend „JOPML“ oder „Programm“)
-Fassung vom 29.10.2026 · Programmversion 1.7.4
+Fassung vom 31.10.2026 · Programmversion 1.10.0
 
 ════════════════════════════════════════════════════════════════════════
 LESEHINWEIS, ZUSTIMMUNGSMECHANIK UND AUSLEGUNGSREGEL
@@ -80,10 +80,10 @@ Abs. 5 – Unentgeltlichkeit und Haftungsmaßstab
  3. Soweit sie als Leihe zu qualifizieren ist, gilt entsprechend § 599 BGB.
  4. Die Haftung für Sach- und Rechtsmängel richtet sich in diesem Rahmen nach den §§ 523 und 524 BGB und beschränkt sich auf arglistig verschwiegene Mängel.
 
-Abs. 6 – Überlassung „wie besehen“
- 1. Das Programm wird „wie besehen“ („as is“) und „wie verfügbar“ („as available“) überlassen.
- 2. Zugesicherte Eigenschaften, eine bestimmte Eignung für einen bestimmten Zweck, Fehlerfreiheit, Unterbrechungsfreiheit, Kompatibilität mit bestimmter Hard- oder Software und eine Verfügbarkeit der Dienste Dritter werden nicht zugesagt.
- 3. Beschreibungen in der Oberfläche, in Hilfetexten, in Antworten des KI-Assistenten und in Beispielen stellen weder Zusicherungen noch Garantien dar.
+Abs. 6 – Beschaffenheit des Programms; keine Zusicherungen
+ 1. Das Programm wird in dem Zustand überlassen, den es nach dem jeweiligen Entwicklungsstand hat. Ein pauschaler Ausschluss jeder Haftung nach angelsächsischem Vorbild („as is“) wird bewusst nicht vereinbart, weil er in vorformulierten Bedingungen unwirksam sein kann (§§ 305 ff., 306, 307, 309 Nr. 7 BGB). Maßgeblich ist allein die Haftungsregelung in § 2 Abs. 6.
+ 2. Zugesicherte Eigenschaften, eine bestimmte Eignung für einen bestimmten Zweck, Fehlerfreiheit, Unterbrechungsfreiheit, Kompatibilität mit bestimmter Hard- oder Software und eine Verfügbarkeit der Dienste Dritter werden nicht zugesagt. Gesetzliche Rechte, die sich aus zwingendem Recht ergeben, bleiben unberührt.
+ 3. Beschreibungen in der Oberfläche, in Hilfetexten, in Antworten der KI und in Beispielen stellen weder Zusicherungen noch Garantien dar.
 
 Abs. 7 – Vertragsschluss, Änderungen, Beendigung
  1. Der Nutzungsvertrag kommt durch die Betätigung der Schaltfläche „Akzeptieren“ zustande.
@@ -136,16 +136,18 @@ Abs. 5 – Datenverlust
  4. Die Löschung eines Kontos (§ 4 Abs. 5) ist endgültig. Eine Wiederherstellung oder Passwortrücksetzung ist nicht vorgesehen.
 
 Abs. 6 – Haftungsmaßstab und Grenzen
- 1. Der Bereitsteller haftet für Schäden jeder Art, gleich aus welchem Rechtsgrund, nur bei Vorsatz und grober Fahrlässigkeit (§ 521 BGB entsprechend).
- 2. Im Übrigen ist die Haftung im gesetzlich zulässigen Höchstmaß ausgeschlossen. Dies gilt insbesondere für leichte Fahrlässigkeit, für mittelbare Schäden, Folgeschäden, entgangenen Gewinn, Nutzungsausfall und immaterielle Schäden, soweit zwingende Vorschriften nicht entgegenstehen.
- 3. Nach Absatz 1 und 2 sind nicht ausgeschlossen
+ 1. Der Bereitsteller haftet für Schäden jeder Art, gleich aus welchem Rechtsgrund, bei Vorsatz und grober Fahrlässigkeit uneingeschränkt (§ 521 BGB entsprechend; § 309 Nr. 7 Buchst. b BGB).
+ 2. Die Haftung für Schäden aus der Verletzung des Lebens, des Körpers oder der Gesundheit bleibt bei jeder Form des Verschuldens unbeschränkt (§ 309 Nr. 7 Buchst. a BGB).
+ 3. Bei leichter Fahrlässigkeit haftet der Bereitsteller nur bei der Verletzung einer wesentlichen Vertragspflicht (Kardinalpflicht), also einer Pflicht, deren Erfüllung die ordnungsgemäße Durchführung des Nutzungsverhältnisses überhaupt erst ermöglicht und auf deren Einhaltung der Nutzer regelmäßig vertrauen darf. Die Haftung ist in diesem Fall auf den vertragstypischen, vorhersehbaren Schaden begrenzt.
+ 4. Für die Verletzung unwesentlicher Nebenpflichten durch leichte Fahrlässigkeit ist die Haftung ausgeschlossen. Das gilt auch für mittelbare Schäden, Folgeschäden, entgangenen Gewinn und Nutzungsausfall, soweit sie nicht unter Nummer 1 oder 2 fallen.
+ 5. Nicht ausgeschlossen oder beschränkt sind in jedem Fall
   a) die Haftung für Vorsatz (§ 276 Abs. 3 BGB),
   b) die Haftung für Schäden aus der Verletzung des Lebens, des Körpers oder der Gesundheit,
   c) die Haftung nach dem Produkthaftungsgesetz,
   d) die Haftung für arglistig verschwiegene Mängel,
-  e) die Haftung aus ausdrücklich übernommenen Garantien.
- 4. Soweit eine Haftung besteht, ist sie, soweit zulässig, auf den vorhersehbaren, typischerweise eintretenden Schaden beschränkt.
- 5. Der Nutzer muss sich ein Mitverschulden nach § 254 BGB anrechnen lassen und ist zur Schadensminderung verpflichtet.
+  e) die Haftung aus ausdrücklich übernommenen Garantien,
+  f) die Haftung nach der DSGVO (Art. 82) und anderen zwingenden Vorschriften.
+ 6. Der Nutzer muss sich ein Mitverschulden nach § 254 BGB anrechnen lassen und ist zur Schadensminderung verpflichtet.
 
 ════════════════════════════════════════════════════════════════════════
 § 3 AUSSCHLUSS DER HAFTUNG FÜR KONTOSPERREN UND ANTI-CHEAT-ERKENNUNG
@@ -193,7 +195,7 @@ Abs. 9 – Verlust virtueller Güter
   c) kosmetischen Gegenständen („Skins“) und Sammelobjekten,
   d) Ranglistenplatzierungen, Statistiken und Erfolgen,
   e) Turnierteilnahmen, Preisgeldern und Belohnungen
- haftet der Bereitsteller nicht, soweit nicht § 2 Abs. 6 Nr. 3 eingreift.
+ haftet der Bereitsteller nicht, soweit nicht § 2 Abs. 6 Nr. 5 eingreift.
  2. Regressansprüche des Nutzers gegen den Bereitsteller wegen solcher Verluste sind im gesetzlich zulässigen Höchstmaß ausgeschlossen.
  3. Der Nutzer trägt das Risiko einer Sperre allein.
 
@@ -298,7 +300,8 @@ Das Programm verwendet, verweist auf oder wurde unter Einsatz folgender Technolo
  g) Avalonia UI – Avalonia (MIT License) und WPF/XAML-UI-Engines als Gegenstand einer geplanten Portierung;
  h) Supabase Inc. – Supabase Auth, Supabase PostgreSQL Services, Edge Functions und Vault (Apache-2.0 bzw. Dienstbedingungen) sowie PostgreSQL (PostgreSQL License);
  i) GitHub – Quellcodeverwaltung und Open-Source-Hosting (GitHub-Nutzungsbedingungen);
- j) Anthropic PBC – Claude Language Model Tooling, das bei der Entwicklung eingesetzt wurde;
+ j) Anthropic PBC – Claude (nur als Entwicklungswerkzeug eingesetzt; im Programm gibt es seit Version 1.9.0 keinen Chat mit Claude oder ChatGPT);
+ j2) Groq, Inc. – Groq-Dienst für KI-Modelle (im KI-Chat als wählbare KI; die Modelle selbst stammen von deren jeweiligen Herstellern und unterliegen deren Lizenzen);
  k) Google LLC – Google AI Gemini Core Architecture, Google Sign-In (OAuth 2.0), Google Ads SDK Framework und AdMob (nur als inaktiver Platzhalter);
  l) Nuitka – optionale Kompilierung (Apache-2.0); Dotfuscator und ILRepack – optionale Schutzwerkzeuge für den C#-Zweig.
 
@@ -309,7 +312,7 @@ Abs. 2 – Keine Unterstützung durch Dritte
 
 Abs. 3 – Verfügbarkeit der Dienste Dritter
  1. Dienste Dritter können jederzeit geändert, eingeschränkt, kostenpflichtig gemacht oder eingestellt werden.
- 2. Der Bereitsteller haftet nicht für Ausfälle, Änderungen, Preisänderungen, Einschränkungen oder Datenverluste, die diese Dienste verursachen, soweit nicht § 2 Abs. 6 Nr. 3 eingreift.
+ 2. Der Bereitsteller haftet nicht für Ausfälle, Änderungen, Preisänderungen, Einschränkungen oder Datenverluste, die diese Dienste verursachen, soweit nicht § 2 Abs. 6 Nr. 5 eingreift.
  3. Inhalte, die der KI-Assistent oder der Makro-Generator liefert, können fehlerhaft sein. Der Nutzer prüft jedes erzeugte Makro vor der Ausführung.
 
 ════════════════════════════════════════════════════════════════════════
@@ -337,7 +340,7 @@ Abs. 3 – Ersetzung
 Abs. 4 – Kaskade der Kernregelung
  1. Selbst wenn sich einzelne Haftungsausschlüsse in den §§ 2 bis 16 als unwirksam erweisen,
   a) bleiben alle übrigen Haftungsausschlüsse bestehen, und
-  b) bleibt der Haftungsmaßstab des § 2 Abs. 6 Nr. 1 (Haftung nur für Vorsatz und grobe Fahrlässigkeit) bestehen, soweit er wirksam ist.
+  b) bleibt der Haftungsmaßstab des § 2 Abs. 6 (Haftungsmaßstab: unbeschränkt bei Vorsatz, grober Fahrlässigkeit und Personenschäden, im Übrigen nur bei Kardinalpflichten und begrenzt) bestehen, soweit er wirksam ist.
  2. Selbst wenn auch diese Regelungen unwirksam sein sollten, gilt als Kernregelung, dass der Bereitsteller nur in dem Umfang haftet, den das anwendbare zwingende Recht für eine unentgeltliche Überlassung mindestens vorschreibt, und nicht darüber hinaus.
  3. Diese Kernregelung ist die Mindestgarantie dieser Bedingungen. Sie besteht auch dann fort, wenn alle übrigen Bestimmungen unwirksam sein sollten.
 
@@ -382,7 +385,14 @@ Abs. 3 – Regeln, Wortfilter, Melden, Moderation
  2. Ein automatischer Wortfilter blockiert Begriffe, die gegen diese Regeln verstoßen, in Namen und Nachrichten. Der Filter ist nicht fehlerfrei; er kann zu viel oder zu wenig blockieren. Es besteht kein Anspruch auf Freischaltung eines Begriffs.
  3. Nachrichten und Marktplatz-Beiträge können gemeldet werden. Mit einer Meldung übermittelt der Nutzer den Text der gemeldeten Nachricht (im Klartext) an den Bereitsteller; nur dadurch wird er für diesen lesbar. Der Melder darf nur Inhalte melden, die er selbst sehen darf.
  4. Serverbetreiber und Administratoren dürfen Mitglieder stummschalten, den Langsam-Modus setzen und Mitglieder entfernen. Der Bereitsteller darf Server entfernen, Inhalte löschen und Konten sperren, insbesondere nach Meldungen, bei Verstößen gegen diese Bedingungen oder bei Missbrauch. Ein Anspruch auf Wiederherstellung besteht nicht.
- 5. Meldungen und Hinweise auf rechtswidrige Inhalte können über das Kontaktformular im Programm gesendet werden (vgl. Art. 16 der Verordnung (EU) 2022/2065, Gesetz über digitale Dienste). Der Bereitsteller prüft sie nach seinen Möglichkeiten und handelt in dem Umfang, den das Gesetz vorschreibt.
+ 5. Für Meldungen rechtswidriger Inhalte gilt das Verfahren in Absatz 3a.
+
+Abs. 3a – Meldeverfahren für rechtswidrige Inhalte (Notice and Action, Art. 16 DSA)
+ 1. Jede Person und jede Stelle kann Inhalte melden, die sie für rechtswidrig hält (Nachrichten, Forenbeiträge, Marktplatz-Makros, geteilte Module, Namen). Das geht über die Schaltfläche „Melden“ am Inhalt oder über das Kontaktformular im Programm; beide sind elektronisch und ohne Umweg erreichbar.
+ 2. Eine Meldung soll enthalten: a) eine hinreichend begründete Erläuterung, warum der Inhalt rechtswidrig sein soll; b) die genaue elektronische Fundstelle (zum Beispiel Modul-ID, Beitrags-ID, Servername und Kanal) und, wenn möglich, weitere Angaben zur Auffindung; c) Name und E-Mail-Adresse der meldenden Person (nicht erforderlich bei Meldungen zu Straftaten nach den Art. 3 bis 7 der Richtlinie 2011/93/EU); d) die Erklärung, dass die Angaben nach bestem Wissen richtig und vollständig sind.
+ 3. Der Bereitsteller bestätigt den Eingang einer Meldung, sobald eine Kontaktangabe vorliegt, prüft sie sorgfältig, zeitnah und objektiv und entscheidet nicht allein automatisiert über rechtswidrige Inhalte, sondern lässt die Entscheidung von einer Person treffen. Bis zur Prüfung kann der Inhalt vorläufig ausgeblendet werden (bei gemeldeten Modulen geschieht das automatisch).
+ 4. Wird ein Inhalt entfernt oder gesperrt, erhalten der betroffene Nutzer und, soweit bekannt, die meldende Person eine Mitteilung mit den Gründen, der Rechtsgrundlage oder dem Verstoß gegen diese Bedingungen und dem Hinweis auf Rechtsbehelfe (interne Überprüfung über das Kontaktformular, außergerichtliche Streitbeilegung, gerichtlicher Rechtsschutz; Art. 17, 20, 21 DSA).
+ 5. Wer vorsätzlich unbegründete Meldungen massenhaft sendet, kann nach Warnung vorübergehend von der Meldefunktion ausgeschlossen werden (Art. 23 DSA). Die Hinweise sind keine Rechtsberatung. Soweit einzelne Pflichten nach dem DSA für den Bereitsteller wegen seiner Größe nicht gelten (Art. 19 DSA), bleibt dieses Verfahren als freiwillige Zusage bestehen.
 
 Abs. 4 – Verantwortung für Inhalte
  1. Für Nachrichten, Forenbeiträge, Namen, Marktplatz-Beiträge und sonstige Inhalte ist allein der jeweilige Nutzer verantwortlich. Der Bereitsteller macht sich diese Inhalte nicht zu eigen.
@@ -398,28 +408,49 @@ Abs. 5 – Marktplatz für Makros
 
 Abs. 6 – News
 Die News sind Mitteilungen des Bereitstellers. Aus ihnen folgt kein Anspruch auf Funktionen, Termine oder Fortbestand.
+Beim Hochladen einer neuen Version schreibt das Programm automatisch eine Release-Note (je Version ein aufklappbarer Eintrag in den News, Stand der Änderungen laut Programm und Angaben des Administrators). Release-Notes enthalten keine personenbezogenen Daten, sind für alle angemeldeten Cloud-Konten sichtbar und können ungenau oder unvollständig sein; maßgeblich ist das Programm selbst.
 
 ════════════════════════════════════════════════════════════════════════
-§ 10 KI-FUNKTIONEN (HILFE-ASSISTENT, MAKRO-GENERATOR)
+§ 10 KI-FUNKTIONEN (HILFE-ASSISTENT, MAKRO-GENERATOR, KI-CHAT, FEHLERHILFE)
 ════════════════════════════════════════════════════════════════════════
 
-Abs. 1 – Hinweis auf KI-Systeme
- 1. Der Hilfe-Assistent und der KI-Makro-Generator werden von einem KI-Modell (Google AI Gemini) erzeugt. Der Nutzer kommuniziert dabei nicht mit einem Menschen (vgl. Art. 50 der Verordnung (EU) 2024/1689, KI-Verordnung). Die Antworten werden automatisch erzeugt.
- 2. Der Zugriff erfolgt über einen Server des Bereitstellers (Edge Function). Der Schlüssel zum KI-Dienst liegt nur dort und niemals im Programm.
+Abs. 1 – Hinweis auf KI-Systeme und Kennzeichnung (Art. 50 KI-Verordnung)
+ 1. Der Hilfe-Assistent, der KI-Makro-Generator und das Modul „KI-Chat“ werden von KI-Modellen erzeugt: Google AI Gemini (Google LLC) und – im KI-Chat wahlweise – Modelle über den Dienst von Groq, Inc. (Groq). Andere Anbieter (z. B. Claude, ChatGPT) werden im Programm nicht angeboten. Der Nutzer kommuniziert dabei nicht mit einem Menschen (Art. 50 Abs. 1 der Verordnung (EU) 2024/1689, KI-Verordnung). Die Antworten werden automatisch erzeugt.
+ 2. Antworten im KI-Chat sind in der Oberfläche als „KI-erzeugt“ gekennzeichnet und nennen den Anbieter und das Modell. Von der KI geschriebene Makros, Skripte oder Modulcode sind KI-erzeugte Inhalte; sie werden nicht automatisch ausgeführt oder installiert, sondern erst nach Prüfung und ausdrücklicher Handlung des Nutzers.
+ 3. Der Zugriff erfolgt über einen Server des Bereitstellers (Edge Function). Die Schlüssel zu den KI-Diensten liegen nur dort und niemals im Programm.
+ 4. Das Programm nutzt die KI nicht für verbotene Praktiken im Sinne von Art. 5 der KI-Verordnung (keine unterschwellige Beeinflussung, keine Ausnutzung von Schwächen) und nicht für Hochrisiko-Zwecke nach Anhang III. Die KI wird angewiesen, nicht zu manipulieren und sich nicht als Mensch auszugeben.
 
-Abs. 2 – Welche Daten übermittelt werden
- 1. Übermittelt werden der eingegebene Text, die letzten Nachrichten des laufenden Gesprächs (höchstens zehn), die Sprache, die Programmversion und das mitgesendete Handbuch des Programms. Die Anfrage wird mit dem Konto des Nutzers verknüpft, um das Tageskontingent zu zählen.
+Abs. 2 – Auswahl von Anbieter und Modell
+ 1. Im KI-Chat wählt der Nutzer Gemini oder Groq und ein Modell aus der Liste, die der jeweilige Anbieter über den Server des Bereitstellers bereitstellt. Die Wahl wird lokal gemerkt. Ist das gewünschte Modell nicht (mehr) verfügbar, verwendet der Server das Standardmodell. Der tatsächlich antwortende Anbieter und das Modell werden angezeigt. Ob ein Modell die beste Antwort liefert, wird nicht zugesagt.
+ 2. Welche Anbieter verfügbar sind, hängt davon ab, welche Zugänge der Bereitsteller eingerichtet hat. Anbieter und Modelle können jederzeit gewechselt, eingeschränkt oder eingestellt werden.
+ 3. Das Modul „KI-Chat“ kann auf Wunsch des Nutzers vollständige Module (Quelltext und Bedienoberfläche) schreiben. Der Quelltext wird nie automatisch installiert: Der Nutzer löst das Hinzufügen selbst aus, nachdem das Programm die automatische Prüfung und die Warnung (Modulcode läuft mit allen Rechten des Programms) angezeigt hat.
+
+Abs. 3 – Welche Daten übermittelt werden; Einwilligung; Drittland
+ 1. Übermittelt werden der eingegebene Text, die letzten Nachrichten des laufenden Gesprächs (Hilfe-Assistent: höchstens zehn; KI-Chat: höchstens zwölf), die Sprache, die Programmversion und je nach Funktion Hintergrundtexte (Handbuch, Makro-Sprache, Modul-Anforderungen). Die Anfrage wird mit dem Konto des Nutzers verknüpft, um das Tageskontingent zu zählen. Auf dem Server wird der Verlauf des KI-Chats nicht gespeichert; lokal nur, wenn der Nutzer das einschaltet (Abs. 7 Nr. 3).
  2. Der Nutzer gibt dort keine personenbezogenen, vertraulichen, geheimen oder urheberrechtlich geschützten Inhalte, keine Passwörter, Schlüssel, Passphrasen oder Zugangsdaten ein.
- 3. Der Dienst des KI-Anbieters kann Daten außerhalb der Europäischen Union verarbeiten. Die Verarbeitung dort richtet sich nach den Bedingungen des Anbieters.
+ 3. Die KI-Anbieter (Google LLC, Groq, Inc.) haben ihren Sitz in den USA und können Daten außerhalb der Europäischen Union verarbeiten, nach ihren eigenen Bedingungen und Datenschutzhinweisen. Rechtsgrundlage für den KI-Chat ist die Einwilligung (Art. 6 Abs. 1 Buchst. a, Art. 49 Abs. 1 Buchst. a DSGVO), die vor der ersten Nutzung je Anbieter ausdrücklich eingeholt wird. Die Einwilligung ist freiwillig; ohne sie bleibt der KI-Chat gesperrt. Sie kann jederzeit mit Wirkung für die Zukunft widerrufen werden, indem die Datei „ai_chat_consent.json“ im Datenordner gelöscht wird oder indem der Nutzer den KI-Chat nicht mehr nutzt. Für Hilfe-Assistent und Makro-Generator gilt Art. 6 Abs. 1 Buchst. b DSGVO (Nutzung der vom Nutzer ausgelösten Funktion).
+ 4. Mit den Anbietern bestehen die jeweils von ihnen angebotenen Vereinbarungen zur Datenverarbeitung. Ein Anspruch auf eine bestimmte Datenverarbeitung außerhalb der Bedingungen des Anbieters besteht nicht.
 
-Abs. 3 – Grenzen der Richtigkeit
+Abs. 4 – Grenzen der Richtigkeit
  1. KI-Antworten können falsch, veraltet, unvollständig oder irreführend sein, auch wenn sie überzeugend klingen. Sie ersetzen weder fachlichen noch rechtlichen, medizinischen oder sicherheitsrelevanten Rat.
- 2. Ein von der KI erzeugtes Makro ist vor der Ausführung zu lesen, zu verstehen und zu testen. Das Programm prüft Makros auf Zulässigkeit, nicht auf Sinn oder Unschädlichkeit.
- 3. Die KI darf nicht dazu verwendet werden, Anti-Cheat-Systeme zu umgehen, in Online-Spielen zu betrügen oder Spielregeln zu brechen. Entsprechende Anfragen werden nicht unterstützt.
+ 2. Ein von der KI erzeugtes Makro, Skript oder Modul ist vor der Ausführung oder dem Hinzufügen zu lesen, zu verstehen und zu testen. Das Programm prüft Makros auf Zulässigkeit und Module auf Dateityp, Größe und auffällige Stellen, nicht auf Sinn oder Unschädlichkeit.
+ 3. Die KI darf nicht dazu verwendet werden, Anti-Cheat-Systeme zu umgehen, in Online-Spielen zu betrügen (Zielhilfen, Wallhacks, Rückstoß-Kompensation, Auslesen von Spielspeicher), Schadsoftware zu erstellen oder Spielregeln zu brechen. Entsprechende Anfragen werden nicht unterstützt.
 
-Abs. 4 – Kontingent und Verfügbarkeit
- 1. Pro Konto und Tag steht nur eine begrenzte Zahl von Anfragen zur Verfügung (derzeit 60); zusätzlich gibt es ein Tagesbudget für alle Nutzer zusammen. Bei Erreichen eines Limits ist die KI bis zum nächsten Tag nicht verfügbar.
+Abs. 5 – Kontingent und Verfügbarkeit
+ 1. Pro Konto und Tag steht nur eine begrenzte Zahl von Anfragen zur Verfügung; zusätzlich gibt es eine Obergrenze für die Länge einer Antwort (in Tokens), eine Obergrenze für die am Tag verbrauchten Tokens und ein Tagesbudget für alle Nutzer zusammen. Bei Erreichen eines Limits ist die KI bis zum nächsten Tag nicht verfügbar. Damit wird Missbrauch begrenzt. Der Administrator legt die Standardwerte fest und kann für einzelne Konten persönliche Werte festlegen, jeweils auch „Maximum“ (größter vom System zugelassener Wert) oder „kein Limit“ (technisch bleibt eine einzelne Antwort auf 16 384 Tokens begrenzt). Ein Anspruch auf ein bestimmtes Limit besteht nicht. Zur Zählung der Tokens wird pro Konto und Tag die vom KI-Anbieter gemeldete Token-Zahl gespeichert, nicht der Inhalt.
  2. Die KI kann jederzeit eingeschränkt, geändert oder eingestellt werden, etwa bei Ausfall des Anbieters, Kosten oder Missbrauch. Ohne KI bleiben der Offline-Generator für einfache Sätze und die FAQ des Programms nutzbar.
+
+Abs. 6 – Fehlerhilfe („KI fragen“) und Auswertung von Fehlermeldungen
+ 1. Bei Fehlermeldungen bietet das Programm den Knopf „KI fragen“ an. Erst wenn der Nutzer ihn drückt, werden der Fehlercode und der (um Benutzerordner bereinigte) Fehlertext wie eine Chat-Nachricht an die gewählte KI gesendet; es gelten Abs. 3 bis 5 (Einwilligung, Drittland, Kontingent).
+ 2. Der Administrator kann die im Admin-Bereich zusammengefassten automatischen Fehlergruppen (§ 11 Abs. 1 Nr. 4) von einer KI (Gemini oder Groq) auswerten lassen. Dabei werden nur gekürzte, bereinigte Gruppentexte (Fehlercode, Fehlertext, Häufigkeit, Programmversionen) ohne Kontodaten und ohne E-Mail-Adressen übermittelt. Das Ergebnis ist ein KI-erzeugter Vorschlag und wird vom Administrator geprüft; es erfolgt keine automatisierte Entscheidung mit Rechtswirkung gegenüber Nutzern (Art. 22 DSGVO).
+
+Abs. 7 – Automatischer Wechsel, Streaming, lokaler Verlauf, Modul-Änderungen und Vorlagen (ab Version 1.10.0)
+ 1. Automatischer Wechsel: Erreicht der gewählte Anbieter ein Limit oder fällt er aus, kann der Server die Anfrage automatisch an den anderen Anbieter weitergeben. Das Programm erlaubt das nur, wenn der Nutzer auch für diesen Anbieter die Einwilligung nach Abs. 3 Nr. 3 erteilt hat; sonst unterbleibt der Wechsel. Der tatsächlich antwortende Anbieter wird angezeigt. Für die Daten gilt bei dem anderen Anbieter dasselbe wie bei dem gewählten.
+ 2. Streaming und Abbrechen: Antworten erscheinen Stück für Stück. Der Nutzer kann die Antwort jederzeit abbrechen. Bis zum Abbruch bereits erzeugte Tokens können dem Tagesverbrauch trotzdem angerechnet werden.
+ 3. Lokaler Verlauf: Auf Wunsch des Nutzers (Schalter unter „Chats“, standardmäßig aus) speichert das Programm KI-Chats lokal auf dem Gerät, geordnet nach Projekten (allgemein oder je eigenem Modul), höchstens 30 Chats je Projekt und je Chat die letzten 40 Nachrichten. Die Datei ist unter Windows an das Windows-Benutzerkonto gebunden verschlüsselt (DPAPI); auf anderen Systemen ist der Schutz schwächer und nur eine Verschleierung. Der Verlauf wird nicht an den Server übertragen und nicht in Konto-Sicherungen aufgenommen. Beim Ausschalten des Schalters wird der gesamte gespeicherte Verlauf gelöscht; einzelne Chats können gelöscht werden. Gespeicherte Chats können Angaben enthalten, die der Nutzer eingegeben hat; wer das Gerät mit anderen teilt, soll die Funktion ausgeschaltet lassen.
+ 4. Fehler beheben lassen: Wählt der Nutzer „Mit KI reparieren“ für ein eigenes Modul, wird der Quelltext dieses Moduls (gekürzt auf etwa 9000 Zeichen) als Hintergrundtext an die gewählte KI gesendet; es gelten Abs. 3 bis 5. Der Nutzer soll keine Zugangsdaten oder Geheimnisse im Quelltext haben. Ein Änderungsvorschlag wird nie automatisch übernommen: Das Programm zeigt die Änderungen (Zeilen hinzugefügt/entfernt), das Ergebnis der automatischen Prüfung und die Warnung nach Abs. 4 Nr. 2; erst der Klick „Änderung übernehmen“ schreibt die Datei. Der bisherige Stand wird zuvor lokal gesichert (höchstens 15 Stände je Modul) und kann im Verlauf der Modul-Verwaltung wiederhergestellt werden. Die automatische Prüfung ist keine Garantie; die Verantwortung für das Übernehmen bleibt beim Nutzer (§ 16 Abs. 8 und 10).
+ 5. Modul-Vorlagen („Timer“, „Notizen“, „Hotkey-Zähler“, „Textbausteine“) sind einfache Beispiele des Bereitstellers ohne Zusicherung. Sie laufen wie jedes hinzugefügte Modul mit den Rechten des Programms und durchlaufen dieselbe Prüfung. Lässt der Nutzer eine Vorlage von der KI ändern, wird der Vorlagen-Quelltext als Hintergrundtext an die KI gesendet.
+ 6. Nutzungsstatistik: Der Server zählt täglich je Anbieter und Modell die Anzahl der Anfragen, der Tokens und der automatischen Wechsel. Diese Zähler enthalten weder Inhalte noch eine Kontozuordnung. Der Administrator sieht sie als Diagramm und kann ein Tagesbudget für alle Konten festlegen; ab 80 % wird er gewarnt, bei 100 % antwortet die KI bis zum nächsten Tag nicht mehr (Abs. 5).
 
 ════════════════════════════════════════════════════════════════════════
 § 11 DIAGNOSE, LEBENSZEICHEN UND FEHLERBERICHTE; EINSICHT DES ADMINISTRATORS
@@ -427,21 +458,27 @@ Abs. 4 – Kontingent und Verfügbarkeit
 
 Abs. 1 – Was gesendet wird
  1. Angemeldete Cloud-Konten senden, solange das Programm läuft, etwa einmal pro Minute ein Lebenszeichen mit folgenden Angaben: Programmversion, Betriebssystem (Name und Hauptversion) und die gerade geöffnete Programmseite (z. B. „gamer“). Zusätzlich wird der Zeitpunkt gespeichert. Dies ermöglicht die Anzeige, wie viele Nutzer gerade online sind und welche Versionen im Einsatz sind.
- 2. Tritt im Programm ein Fehler auf, kann ein Fehlerbericht gesendet werden: Art des Fehlers, Fehlermeldung und technischer Verlauf (Stacktrace) sowie Version und Betriebssystem. Der Ordner des Benutzerprofils wird in Pfaden vor dem Senden durch „~“ ersetzt. Eingaben, Makros, Nachrichten, Tastenanschläge, Bildschirminhalte, Dateien oder Passwörter gehören nicht dazu; ein Fehlertext kann aber im Einzelfall unbeabsichtigt Bruchstücke solcher Angaben enthalten (z. B. einen Dateinamen).
+ 2. Tritt im Programm ein Fehler auf, kann ein automatischer Fehlerbericht gesendet werden: Fehlercode (z. B. E-MOD-005), Art des Fehlers (z. B. Absturz, Modul-Import, Modul-Upload, Update, KI), Fehlermeldung und technischer Verlauf (Stacktrace) sowie Version und Betriebssystem. Gleiche Fehler werden pro Programmstart nur einmal gesendet. Der Ordner des Benutzerprofils wird in Pfaden vor dem Senden durch „~“ ersetzt. Eingaben, Makros, Nachrichten, Tastenanschläge, Bildschirminhalte, Dateien oder Passwörter gehören nicht dazu; ein Fehlertext kann aber im Einzelfall unbeabsichtigt Bruchstücke solcher Angaben enthalten (z. B. einen Dateinamen).
  3. Pro Konto werden höchstens 20 Fehlerberichte in zehn Minuten angenommen; Texte werden gekürzt.
+ 4. Der Server speichert automatische Fehlerberichte nicht einzeln, sondern verdichtet (komprimiert) sie zu Fehlergruppen: je Gruppe Fehlercode, Art, ein gekürzter Beispieltext und Beispiel-Stacktrace, Anzahl, erstes und letztes Auftreten sowie Zähler je Programmversion und Betriebssystem. Eine Zuordnung zu einzelnen Konten wird dabei nicht gespeichert. Es werden höchstens 2000 Gruppen vorgehalten; die ältesten werden zuerst entfernt.
+ 5. Zusätzlich gibt es den Knopf „Melden“ im Programm. Meldungen von Nutzern (Kategorie, frei geschriebener Text bis 2000 Zeichen, optional Fehlercode, Version, Betriebssystem) werden – anders als automatische Berichte – dem Konto zugeordnet gespeichert und sind für den Administrator mit der hinterlegten E-Mail-Adresse sichtbar. Sie werden nur auf aktive Handlung des Nutzers gesendet, unabhängig vom Diagnose-Schalter (Rechtsgrundlage: Art. 6 Abs. 1 Buchst. b und f DSGVO; bei Hinweisen auf rechtswidrige Inhalte gilt zusätzlich § 9). Es sind höchstens zehn Meldungen pro Konto und Tag möglich; Meldungen werden nach 180 Tagen gelöscht. Der Nutzer soll keine Passwörter oder personenbezogenen Daten Dritter eintragen.
+ 6. Auf Wunsch des Nutzers (Kästchen im Melden-Fenster, standardmäßig aus) wird einer Meldung ein Kontext mitgegeben: die gerade geöffnete Seite und die zuletzt besuchten Seiten (nur Seitennamen, keine Eingaben), höchstens 300 Zeichen. Ebenso kann der Nutzer unter Einstellungen den Seitennamen für automatische Fehlerberichte einschalten (standardmäßig aus); er wird dann in der Fehlergruppe als Beispiel gespeichert, ohne Kontozuordnung.
+ 7. Der Administrator kann aus Fehlergruppen Tickets mit Status (neu, in Arbeit, behoben) und Notiz anlegen, Meldungen mit Tickets verknüpfen (Meldungen mit demselben Fehlercode werden automatisch verknüpft) und dem Melder antworten (bis 1000 Zeichen). Der Melder sieht unter „Melden > Meine Meldungen“ den Status seines Tickets und die Antwort; ein Hinweis erscheint beim Programmstart. Tickets enthalten keine Kontodaten. Antworten sind Teil der Meldung und werden mit ihr nach 180 Tagen gelöscht. Es erfolgt keine automatisierte Entscheidung mit Rechtswirkung (Art. 22 DSGVO).
 
 Abs. 2 – Zweck, Rechtsgrundlage, Widerspruch
  1. Zweck ist der sichere und stabile Betrieb, die Fehlersuche und die Verbesserung des Programms. Rechtsgrundlage ist das berechtigte Interesse des Bereitstellers an Betriebssicherheit und Fehlerbehebung (Art. 6 Abs. 1 Buchst. f DSGVO).
- 2. Die Daten sind dem Konto über eine technische Kennung zugeordnet (Pseudonym) und können dadurch Personenbezug haben. Der Nutzer kann der Verarbeitung widersprechen (Art. 21 DSGVO), indem er unter Einstellungen > Leistung „Anonyme Diagnose senden“ ausschaltet. Danach werden weder Lebenszeichen noch Fehlerberichte gesendet.
+ 2. Die Daten sind dem Konto über eine technische Kennung zugeordnet (Pseudonym) und können dadurch Personenbezug haben. Der Nutzer kann der Verarbeitung widersprechen (Art. 21 DSGVO), indem er unter Einstellungen > Leistung „Anonyme Diagnose senden“ ausschaltet. Danach werden weder Lebenszeichen noch automatische Fehlerberichte gesendet. Der Schalter betrifft nicht die vom Nutzer selbst abgeschickten Meldungen (Abs. 1 Nr. 5) und nicht die Fehlerhilfe „KI fragen“.
  3. Lokale Konten senden nichts.
+ 4. Das Auslesen von Systemangaben auf dem Gerät (Betriebssystem, Version) und das Senden dieser Angaben an den Server fällt in den Anwendungsbereich von § 25 TDDDG. Der Bereitsteller stützt sich darauf, dass diese Angaben für den vom Nutzer gewünschten stabilen Betrieb des Dienstes erforderlich sind und der Nutzer die Übermittlung jederzeit abschalten kann (Opt-out unter Einstellungen > Leistung). Soweit eine Einwilligung erforderlich sein sollte, gilt das Betätigen des Schalters „Anonyme Diagnose senden“ im eingeschalteten Zustand als solche, und der Nutzer kann sie jederzeit widerrufen.
 
 Abs. 3 – Speicherdauer
  1. Pro Konto wird nur das jeweils letzte Lebenszeichen gespeichert; es wird bei jedem neuen überschrieben und mit dem Konto gelöscht.
- 2. Fehlerberichte werden gespeichert, bis der Administrator sie löscht oder das Konto gelöscht wird (dann entfällt die Zuordnung zum Konto).
+ 2. Fehlergruppen werden gespeichert, bis der Administrator sie löscht oder die Obergrenze erreicht ist (Abs. 1 Nr. 4). Nutzer-Meldungen werden nach 180 Tagen oder früher auf Anweisung des Administrators gelöscht; bei Löschung des Kontos entfällt die Zuordnung zum Konto.
 
 Abs. 4 – Einsicht des Administrators
+ Zu Berechtigungen: Administratorrechte werden nur von einem bestehenden Administrator vergeben oder entzogen (Admin-Bereich > Berechtigungen). Jede Vergabe, jeder Entzug und jede Änderung von KI-Limits (Standard oder persönlich) wird mit Zeitpunkt, handelndem Administrator und betroffenem Konto auf dem Server protokolliert (Rechenschaft, Art. 5 Abs. 2 DSGVO). Der letzte Administrator und das eigene Konto können nicht entfernt werden.
  1. Der Administrator-Bereich des Programms ist nur für Konten sichtbar, die der Server als Administrator führt; jede Abfrage wird serverseitig erneut geprüft.
- 2. Der Administrator kann dort einsehen: die Anzahl der Nutzer, die online sind und in den letzten 24 Stunden aktiv waren; die Anzahl registrierter Konten und neuer Konten; die Liste der Konten mit der hinterlegten E-Mail-Adresse, dem Zeitpunkt der Registrierung und der letzten Anmeldung sowie dem letzten Lebenszeichen; die Fehlerberichte; sowie technische Kennzahlen der Datenbank (Größe, Verbindungen, Laufzeit).
+ 2. Der Administrator kann dort einsehen: die Anzahl der Nutzer, die online sind und in den letzten 24 Stunden aktiv waren; die Anzahl registrierter Konten und neuer Konten; die Liste der Konten mit der hinterlegten E-Mail-Adresse, dem Zeitpunkt der Registrierung und der letzten Anmeldung sowie dem letzten Lebenszeichen; die Fehlergruppen (automatische Fehler) und die Nutzer-Meldungen; die Regeln zu Antwortlänge, Nachrichten- und Token-Limits; sowie technische Kennzahlen der Datenbank (Größe, Verbindungen, Laufzeit).
  3. Bei Konten, die nur mit einem Benutzernamen angelegt wurden, ist die hinterlegte Adresse eine interne, technisch erzeugte Adresse und keine private E-Mail-Adresse. Die Anonymität nach § 4 Abs. 1 bleibt insoweit bestehen. Wer eine E-Mail-Adresse freiwillig angibt oder sich mit Google anmeldet, muss damit rechnen, dass diese Adresse im Administrator-Bereich sichtbar ist.
  4. Der Administrator nutzt diese Einsicht ausschließlich für Betrieb, Sicherheit, Support und Missbrauchsabwehr.
 
@@ -482,6 +519,11 @@ Abs. 1 – Updates
 Abs. 2 – Warnungen von Windows und Virenscannern
  1. Das Programm ist nicht mit einem teuren Herausgeber-Zertifikat signiert. Windows (SmartScreen) und andere Sicherheitsprogramme können deshalb warnen („Unbekannter Herausgeber“) oder das Programm fälschlich als Schadsoftware melden („False Positive“), weil Programme, die Eingaben simulieren, typischerweise ähnlich arbeiten wie Schadsoftware.
  2. Der Nutzer entscheidet selbst, ob er der Quelle vertraut. Das Programm sollte nur von der offiziellen Quelle des Bereitstellers bezogen werden. Von Dritten verbreitete oder veränderte Kopien sind nicht vom Bereitsteller und können Schadsoftware enthalten; hierfür wird nicht gehaftet.
+
+Abs. 3 – Produktsicherheit und Schwachstellen
+ 1. Das Programm wird unentgeltlich und ohne Gewinnerzielungsabsicht bereitgestellt. Der Bereitsteller geht deshalb davon aus, dass er derzeit nicht Hersteller im Sinne der Verordnung (EU) 2024/2847 (Cyberresilienzgesetz) ist, soweit das Programm nicht im Rahmen einer Geschäftstätigkeit gegen Entgelt, mit bezahlten Zusatzdiensten oder Werbeeinnahmen bereitgestellt wird. Ändert sich das, wird der Bereitsteller die dann geltenden Pflichten (Sicherheit durch Technikgestaltung, Software-Stückliste, Meldung ausgenutzter Schwachstellen, Sicherheitsupdates) erfüllen, bevor die Änderung wirksam wird.
+ 2. Schwachstellen und Sicherheitsprobleme können über das Kontaktformular im Programm gemeldet werden. Der Bereitsteller bemüht sich, sie zeitnah zu beheben, und stellt Sicherheitskorrekturen über die Update-Funktion bereit; ein Anspruch darauf besteht nicht.
+ 3. Sicherheitsrelevante Maßnahmen im Programm sind unter anderem: Prüfsummen der Updates, Prüfung der Versionsnummer an der hochgeladenen Datei, Passwort-Hash (PBKDF2-SHA256) bei lokalen Konten, Ende-zu-Ende-Verschlüsselung in der Community, Prüfungen und Warnungen beim Import von Modulen und die abgeschottete Lua-Umgebung. Absolute Sicherheit wird nicht zugesagt.
 
 ════════════════════════════════════════════════════════════════════════
 § 14 ERLAUBTE NUTZUNG, MINDESTALTER UND MINDERJÄHRIGE
@@ -566,7 +608,18 @@ Abs. 10 – Geteilte Module
  1. In der Community können Nutzer eigene Module (Python-Code) hochladen und anderen zum Installieren anbieten. Ein Modul läuft nach der Installation mit allen Rechten des Programms und des Kontos des Nutzers und kann Dateien und Daten lesen, ändern und senden.
  2. Module normaler Konten werden anderen erst angezeigt, nachdem ein Admin sie freigegeben hat. Die Freigabe ist eine Sichtkontrolle im Rahmen des Zumutbaren. Sie ist keine Sicherheitsprüfung und keine Zusicherung, dass ein Modul unschädlich, rechtmäßig oder funktionsfähig ist. Auffälligkeitslisten in der Oberfläche sind Lesehilfen ohne Gewähr.
  3. Wer ein Modul teilt, versichert, dass er es selbst geschrieben hat oder weitergeben darf, dass es keine Schadfunktion, keine Zugangsdaten, keine personenbezogenen Daten und keine Rechte Dritter verletzenden Inhalte enthält und dass es nicht gegen die Regeln von Spielen oder Plattformen verstoßen soll. Der Anbieter darf Module jederzeit ausblenden oder löschen und Konten sperren.
- 4. Wer ein geteiltes Modul installiert, tut das auf eigenes Risiko, liest den Code vorher und installiert nur, was er versteht. Für Module von Nutzern haftet der Anbieter nicht, soweit gesetzlich zulässig; die Grenzen von § 3 bleiben unberührt. Schäden durch ein Modul macht der Nutzer gegenüber dem Autor geltend, nicht gegenüber dem Anbieter.
+ 4. Wer ein geteiltes Modul installiert, tut das auf eigenes Risiko, liest den Code vorher und installiert nur, was er versteht. Für Module von Nutzern haftet der Anbieter nicht, soweit gesetzlich zulässig; die Grenzen von § 2 Abs. 6 und § 3 bleiben unberührt. Schäden durch ein Modul macht der Nutzer gegenüber dem Autor geltend, nicht gegenüber dem Anbieter.
+ 5. Mehrstufige Kontrolle: a) automatische Prüfung beim Teilen (Name, Dateitypen, Größe, Anzahl, Wortfilter für Titel und Beschreibung); b) Freigabe durch einen Admin vor der Sichtbarkeit; c) vor der Installation die Anzeige des vollständigen Codes, der auffälligen Stellen und eine zweifache Bestätigung; d) Meldefunktion nach § 9 Abs. 3a, wobei gemeldete Module sofort ausgeblendet werden, bis ein Admin geprüft hat.
+
+Abs. 11 – Modul-Anforderungen und Upload-Kriterien
+ 1. Die genauen Anforderungen an Module, Lua-Skripte, geteilte Module und Makros (Namen, erlaubte Dateitypen, Anzahl, Größen, Pflichtdateien, verbotene Inhalte) zeigt das Programm unter „Modules > Modul-Anforderungen ansehen“ an und lässt sie als Datei speichern. Dieser Text wird aus den im Programm geltenden Grenzwerten erzeugt und ändert sich mit ihnen selbstständig; maßgeblich ist stets die in der installierten Programmversion angezeigte Fassung.
+ 2. Nicht erlaubt sind in Modulen, Skripten, Makros und geteilten Inhalten insbesondere: Cheats für Mehrspieler-Spiele (Zielhilfen, Wallhacks, automatische Rückstoß-Kompensation, Auslesen oder Verändern fremden Arbeitsspeichers, Code-Einschleusung), das Umgehen technischer Schutzmaßnahmen (§ 95a UrhG), Schadsoftware, Datendiebstahl und verschleierter Code, unerlaubtes Mitlesen von Tastatur, Maus oder Zwischenablage sowie rechtswidrige oder rechtsverletzende Inhalte. Einzelspieler-Funktionen und Übungsprogramme mit erfundenen Waffen sind davon nicht betroffen.
+ 3. Lua-Skripte laufen in einer abgeschotteten Umgebung ohne Zugriff auf Dateien (io), Betriebssystem (os) und Debug-Funktionen; Stopp, Notaus und ein Zeitlimit beenden auch Endlosschleifen.
+ 4. Der Administrator kann Programmversionen, die Recoil Arena und Module für alle hochladen. Die Kriterien dafür (Dateitypen, Größen, Versionsprüfung, Prüfsumme) zeigt der Admin-Bereich oben an. Der Admin-Upload ersetzt keine Prüfung durch den Nutzer; § 16 Abs. 8 und 10 gelten auch für Module des Bereitstellers, soweit diese nicht Teil des Programms sind.
+
+Abs. 12 – Recoil Arena
+ 1. Die Recoil Arena ist ein Übungsspiel mit erfundenen Waffen und Rückstoßmustern. Sie liest Maus und Tastatur nur im eigenen Fenster, liest keinen Spielspeicher, sendet keine Eingaben an andere Programme und bildet keine Waffen oder Rückstoßmuster echter Spiele nach. Sie ist kein Werkzeug zum Ausgleich von Rückstoß in Spielen.
+ 2. Die Arena ist Teil der Programmdatei und startet als eigener Prozess. Ihre Maus-Abfrage läuft mit hoher Frequenz nur, solange das Arena-Fenster aktiv ist.
 
 ════════════════════════════════════════════════════════════════════════
 § 17 WICHTIGSTE PUNKTE AUF EINEN BLICK (KEINE ABSCHLIESSENDE ZUSAMMENFASSUNG)
@@ -574,13 +627,13 @@ Abs. 10 – Geteilte Module
 
 Diese Übersicht dient nur der Orientierung. Maßgeblich ist der vollständige Text. Bei Widersprüchen geht der ausführliche Wortlaut der jeweiligen Regelung vor.
 
- 1. Das Programm ist kostenlos, wird anonym bereitgestellt und gibt keine Gewähr. Haftung nur für Vorsatz und grobe Fahrlässigkeit, soweit zulässig; zwingendes Recht (Leben, Körper, Gesundheit, Produkthaftung, arglistiges Verschweigen) bleibt unberührt.
+ 1. Das Programm ist kostenlos und wird anonym bereitgestellt. Haftung unbeschränkt bei Vorsatz, grober Fahrlässigkeit und Schäden an Leben, Körper und Gesundheit; bei leichter Fahrlässigkeit nur für wesentliche Vertragspflichten und begrenzt auf den vorhersehbaren Schaden (§ 2 Abs. 6). Zwingendes Recht (Produkthaftung, arglistiges Verschweigen) bleibt unberührt.
  2. Automatisierte Eingaben können gegen die Regeln von Spielen und Plattformen verstoßen. Konto- und Geräte-Sperren sind dein Risiko. Verwende das Programm vor allem offline und zum Testen.
  3. Teste jedes Makro in einer harmlosen Umgebung. Der Notaus beendet alles sofort. Sichere deine Daten.
  4. Konto: Benutzername und Passwort genügen. Das Passwort kann nicht geändert oder wiederhergestellt werden. Export und Löschung gehen jederzeit selbst in den Einstellungen.
  5. Community: ab 16 Jahren; Nachrichten sind Ende-zu-Ende-verschlüsselt, Namen, Mitgliedschaften und das Forum nicht. Die Passphrase kann nicht zurückgesetzt werden. „Angemeldet bleiben“ speichert sie auf dem Gerät.
- 6. KI: Antworten können falsch sein. Gib nichts Vertrauliches ein. Das Tageskontingent ist begrenzt.
- 7. Diagnose: Version, System, geöffnete Seite und Fehlermeldungen gehen pseudonym an den Bereitsteller; abschaltbar. Der Administrator sieht Online-Zahlen, Kontoliste mit hinterlegter E-Mail und Fehlerberichte.
+ 6. KI: Du sprichst mit einer KI, nicht mit einem Menschen; Antworten sind als KI-erzeugt gekennzeichnet und können falsch sein. Im KI-Chat gehen deine Nachrichten an den gewählten Anbieter (Gemini oder Groq, USA), nur nach deiner ausdrücklichen Einwilligung. Gib nichts Vertrauliches ein. Nachrichten, Antwortlänge und Tokens pro Tag sind begrenzt. „KI fragen“ bei Fehlern sendet den Fehlertext erst nach deinem Klick. Der Chat-Verlauf wird nur auf deinem Gerät gespeichert, wenn du es einschaltest; ein automatischer Wechsel zum anderen Anbieter geschieht nur, wenn du auch dort eingewilligt hast.
+ 7. Diagnose: Version, System, geöffnete Seite und Fehlermeldungen (mit Fehlercode) gehen an den Bereitsteller und werden dort zu Fehlergruppen verdichtet; abschaltbar. Eigene Meldungen über den Knopf „Melden“ werden deinem Konto zugeordnet gespeichert. Der Administrator sieht Online-Zahlen, Kontoliste mit hinterlegter E-Mail, Fehlergruppen und Nutzer-Meldungen.
  8. Lokal gespeichert werden Einstellungen, Makros, Verlauf der Zwischenablage (wenn an) und mehr. Tastenanschläge und Bildinhalte werden nicht übertragen.
  9. Windows und Virenscanner können warnen. Beziehe das Programm nur von der offiziellen Quelle.
 10. Kein Copyright auf den eigenen Code (Public Domain bzw. so nah wie möglich). Fremde Komponenten behalten ihre Lizenzen.
@@ -610,7 +663,7 @@ Die Überschriften dienen der Übersicht und beeinflussen die Auslegung nicht. V
 
 LEGAL_EN = r"""
 TERMS OF USE, DISCLAIMER AND PRIVACY NOTICE
-for "Jaron's OP Makro Launcher" (JOPML) - version of 29 Oct 2026 - program version 1.7.4
+for "Jaron's OP Makro Launcher" (JOPML) - version of 31 Oct 2026 - program version 1.8.7
 (Orientation only. The German text is the authoritative version and is shown in full on request.)
 
 READING NOTE
@@ -622,7 +675,7 @@ SECTION 1 - STATUS, PARTIES
 1.1 "Provider" means the natural person(s) who publish the program anonymously, without a company, register entry or published address. The project is, in the provider's own assessment, not a legal entity, not an unincorporated association (Sec. 54 BGB), not a partnership (Sec. 705 BGB) and not a business (Sec. 14 BGB) as long as it is free and non-profit.
 1.2 Contact is possible only through the contact form in the program. There is no entitlement to a reply, support, bug fixes, continuation of the project or availability of any feature.
 1.3 Clarification: natural persons have legal capacity (Sec. 1 BGB) and can be sued (Sec. 50 ZPO). These terms do not claim otherwise; they regulate the extent of liability.
-1.4 The program is provided free of charge, "as is" and "as available". No warranty of any kind is given. Liability follows the standard for gifts/loans (Sec. 521, 599 BGB): intent and gross negligence only, and for defects only if fraudulently concealed (Sec. 523, 524 BGB).
+1.4 The program is provided free of charge in the state of its current development. A blanket "as is" disclaimer is deliberately not used, because it can be void in pre-formulated terms (Sec. 305 ff., 307, 309 no. 7 BGB). Only Section 2.5 decides liability. Statutory rights under mandatory law are unaffected. Gift/loan rules (Sec. 521, 599 BGB) apply where the free provision is a gift or loan.
 1.5 The contract is concluded by clicking "Accept". Changed terms receive a new version and require your consent again.
 
 SECTION 2 - HARDWARE, SYSTEM AND DATA
@@ -630,7 +683,7 @@ SECTION 2 - HARDWARE, SYSTEM AND DATA
 2.2 The program does not use or limit a graphics card. Throttling options affect only the program's own process.
 2.3 Simulated input is treated like real input by other software and may delete, send or buy things. Test every macro in a harmless environment. Use the stop buttons, global hotkeys and failsafe.
 2.4 Back up your data and create restore points. Account deletion is final; there is no password recovery.
-2.5 Liability: only for intent and gross negligence; otherwise excluded to the extent permitted by law; unaffected: intent, injury to life/body/health, Product Liability Act, fraudulently concealed defects, guarantees (none are given). Your own contributory fault counts (Sec. 254 BGB).
+2.5 Liability: unlimited for intent, gross negligence and injury to life, body or health; for slight negligence only for breach of an essential contractual obligation (cardinal duty) and then limited to the typical, foreseeable damage; no liability for slight negligence in minor duties. Never excluded: intent (Sec. 276 (3) BGB), injury to life/body/health, Product Liability Act, fraudulently concealed defects, guarantees, GDPR Art. 82 and other mandatory law.
 
 SECTION 3 - ACCOUNT BANS AND ANTI-CHEAT
 3.1 Input automation can violate the terms of service (ToS) and EULAs of game publishers. Anti-cheat systems such as Easy Anti-Cheat, Ricochet, Vanguard, BattlEye and Valve Anti-Cheat (and any others) may detect it and issue warnings, temporary or permanent bans or device bans.
@@ -668,19 +721,24 @@ SECTION 9 - COMMUNITY (CHAT, FORUM, MARKETPLACE, NEWS)
 9.2 Chat messages and direct messages are end-to-end encrypted: the provider cannot read them. NOT encrypted: usernames, display names, server and channel names, memberships, roles, timestamps, invitations, and everything in the public forum, marketplace and news. The community passphrase cannot be reset; if you forget it you can only start over (your servers, chats and messages are deleted).
 9.3 "Stay signed in to the Community" stores the passphrase on your computer (on Windows bound to your Windows account). Turn it off on shared computers.
 9.4 A word filter blocks forbidden words; it is not perfect. When you report a message you send its text to the provider. Server owners and admins can mute and remove members; the provider can remove servers, delete content and suspend accounts.
-9.5 You are responsible for what you post. The provider is liable for third-party content only under the statutory host-provider privileges (Art. 6 DSA). Reports of illegal content can be sent through the contact form.
+9.5 You are responsible for what you post. The provider is liable for third-party content only under the statutory host-provider privileges (Art. 6 DSA). 9.5a Reports of illegal content (Art. 16 DSA): use the Report button or the contact form with a reasoned explanation, the exact location (module ID, post ID, server/channel), your name and e-mail and a statement of good faith. The provider confirms receipt, reviews carefully and objectively (a person decides), may hide the content meanwhile (reported modules are hidden automatically), and informs the affected user and the reporter of a decision with reasons and legal remedies (Art. 17, 20, 21 DSA). Abusive mass reports can lead to a temporary exclusion (Art. 23 DSA).
 9.6 Marketplace macros are not checked for content. The program validates commands before running, but a foreign macro can still do harm: read it and test it first.
+9.7 News: when a new version is uploaded the program writes a release note automatically (one expandable entry per version). Release notes contain no personal data, are visible to all signed-in cloud accounts and may be incomplete.
 
-SECTION 10 - AI FUNCTIONS
-10.1 The help assistant and the AI macro generator use Google AI Gemini; you are not talking to a human (Art. 50 AI Act). Your text, the last messages of the conversation, the language, the program version and the manual are sent via the provider's server and linked to your account to count the daily quota (currently 60 per day, plus a global budget).
-10.2 Never enter personal, confidential or secret information, passwords or passphrases. The AI provider may process data outside the EU under its own terms.
-10.3 AI answers can be wrong. Read, understand and test every generated macro. The AI is not to be used to evade anti-cheat or cheat in online games.
+SECTION 10 - AI FUNCTIONS (HELP ASSISTANT, MACRO GENERATOR, AI CHAT)
+10.1 These functions are produced by AI models: Google AI Gemini and, in the AI Chat optionally, models served by Groq, Inc. (Groq). Other providers (e.g. Claude, ChatGPT) are not offered in the program. You are not talking to a human (Art. 50 AI Act). AI Chat answers are labelled "AI-generated" with provider and model. AI-written macros, scripts or module code are never run or installed automatically: you review them and act yourself. The AI is not used for prohibited practices (Art. 5) or high-risk purposes (Annex III).
+10.2 In the AI Chat you choose Gemini or Groq and a model from the list the provider offers through the provider's server; unavailable models fall back to the default model. The answering provider and model are shown; no guarantee of the best answer. The AI Chat can write complete modules (code and window) on request; they are never installed automatically: you start the adding yourself after the automatic check and warning.
+10.3 Sent: your text, the last messages (help: 10, chat: 12), language, program version and, depending on the function, background texts (manual, macro language, module requirements); linked to your account only to count the daily quota (plus limits for answer length and tokens per day, set by the admin, each also "maximum" or "no limit"; only the token count is stored, not the content, and a global budget applies). The AI Chat history is not stored. The providers are based in the USA and process data under their own terms. The AI Chat needs your explicit consent per provider before first use (Art. 6 (1) (a), 49 (1) (a) GDPR); you can withdraw it any time (delete ai_chat_consent.json in the data folder or stop using the chat).
+10.3a Error help: the "Ask AI" button sends the error code and the cleaned error text to the chosen AI only after you click it. The admin can have grouped automatic error reports analysed by an AI (only shortened, cleaned group texts, no account data or e-mails); the result is a suggestion reviewed by the admin, with no automated decision about users (Art. 22 GDPR).
+10.3b New in 1.10.0: (1) Automatic switch to the other AI when a limit is reached or the provider is down - only if you also consented to that provider; the answering provider is shown. (2) Answers stream in pieces; you can cancel (tokens already produced may still count). (3) Chat history is stored locally only if you switch it on (default off), per project, max 30 chats of 40 messages, encrypted for your Windows account (on other systems only obscured), never sent to the server or into account backups; switching it off deletes it. (4) "Fix with AI" sends the source code of your own module (about 9000 characters) as background text to the chosen AI; a proposed change is never applied automatically - you see the diff and the automatic check first, the old version is saved locally (max 15) and can be restored. (5) Module templates are simple examples without warranty and are checked like any module. (6) The server counts per day, provider and model only requests, tokens and automatic switches (no content, no account); the admin sees a chart, can set a daily budget for all accounts (warning from 80 %).
+10.4 Never enter personal, confidential or secret information, passwords or passphrases. AI answers can be wrong. Read, understand and test every generated macro, script or module. The AI must not be used to evade anti-cheat, cheat in online games (aim assistance, wallhacks, recoil compensation, memory reading) or create malware.
 
 SECTION 11 - DIAGNOSTICS AND ADMIN VIEW
-11.1 Cloud accounts send about once a minute a sign of life (program version, operating system, open page, time) and, on errors, an error report (error type, message, technical trace; your user folder in paths is replaced by "~"). No inputs, macros, messages, keystrokes, screen contents or files are sent, although an error text may accidentally contain a fragment such as a file name. Local accounts send nothing.
-11.2 Purpose: stable operation and bug fixing (legitimate interest, Art. 6 (1) (f) GDPR). The data is linked to your account by a technical ID (pseudonym). You can object (Art. 21 GDPR) by switching off "Send anonymous diagnostics" in Settings > Performance.
-11.3 Only the latest sign of life per account is stored. Error reports are kept until the admin deletes them or the account is deleted.
-11.4 The admin area (visible only to server-verified admins) shows: users online and active in 24 hours, number of registered and new accounts, the list of accounts with the stored e-mail address, registration time, last sign-in and last sign of life, error reports and technical database figures. For accounts created with only a username the address is an internal, technically generated one. If you give an e-mail address voluntarily or sign in with Google, expect it to be visible in the admin area.
+11.1 Cloud accounts send about once a minute a sign of life (program version, operating system, open page, time) and, on errors, an automatic error report (error code, type, message, technical trace; your user folder in paths is replaced by "~"). The server condenses these reports into error groups (code, shortened sample text, count, first/last time, counters per version and system) without storing which account sent them. The "Report" button sends a user report (category, your text up to 2000 characters, optional error code, version, system) linked to your account and visible to the admin with your e-mail; it is sent only when you press it, independent of the diagnostics switch, limited to 10 per day and deleted after 180 days. No inputs, macros, messages, keystrokes, screen contents or files are sent, although an error text may accidentally contain a fragment such as a file name. Local accounts send nothing.
+11.2 Purpose: stable operation and bug fixing (legitimate interest, Art. 6 (1) (f) GDPR). Reading system details on your device and sending them falls under Sec. 25 TDDDG; the provider relies on this being needed for the stable operation you asked for, with an opt-out at any time (and, where consent is required, leaving the switch on counts as consent which you can withdraw). The data is linked to your account by a technical ID (pseudonym). You can object (Art. 21 GDPR) by switching off "Send anonymous diagnostics" in Settings > Performance.
+11.3 Only the latest sign of life per account is stored. Error groups are kept until the admin deletes them or the limit of 2000 groups is reached; user reports for 180 days.
+11.3a New in 1.10.0: A report can optionally carry a context (current page and last visited pages, names only, max 300 characters; checkbox off by default). The admin can turn error groups into tickets (new / in progress / fixed) with a note, link reports to tickets and reply to the reporter (max 1000 characters); you see status and answer under Report > My reports. Replies are deleted with the report after 180 days. Tickets contain no account data. No automated decision with legal effect.
+11.4 The admin area (visible only to server-verified admins) shows: users online and active in 24 hours, number of registered and new accounts, the list of accounts with the stored e-mail address, registration time, last sign-in and last sign of life, error groups, user reports, AI limit rules and technical database figures. For accounts created with only a username the address is an internal, technically generated one. If you give an e-mail address voluntarily or sign in with Google, expect it to be visible in the admin area.
 
 SECTION 12 - LOCAL DATA AND PERMISSIONS
 12.1 Stored locally in the program's own folder: settings, profiles, macros, key bindings, crosshair profiles, notes, timers, statistics, the clipboard history (only if switched on), local accounts (password hash), consent records, read markers, notification records and, if you chose it, the remembered community passphrase.
@@ -710,9 +768,12 @@ SECTION 16 - NOTES ON SPECIFIC FUNCTIONS
 16.5 Imported modules (Settings > System; from files, folders or pasted code, kept across updates but not guaranteed to keep working) are program code that runs with all rights of the program and of your account. Import only modules from sources you trust; the program's checks only prevent mistakes and do not detect harmful code. Imported modules are not from the provider, are not checked or supported by it, and the provider is not liable for them as far as the law allows (limits of section 3 unchanged).
 16.6 The Cheat menu runs cheats for single-player modes only: chat commands in Minecraft (worlds with cheats allowed) and the official GTA 5 Enhanced story-mode cheat codes, typed like a keyboard. It reads no game memory, changes no game files and is not for online games, multiplayer servers, competitions or ranked play, where cheats can break rules and lead to bans. Back up worlds and saves first; cheats can affect saves, achievements and trophies. The recoil trainer is a practice field that reads the mouse only inside its own window and sends no input to games. Tested automatically, not inside the games; no guarantee after game updates.
 16.7 Shared modules: users can upload their own modules (Python code) in the community. After installing, a module runs with all rights of the program and of your account and can read, change and send files and data. Modules of normal accounts are shown to others only after an admin approved them; this is a visual check within reason, not a security audit or a promise that a module is harmless, lawful or working. The lists of conspicuous places are reading aids without warranty. Whoever shares a module confirms that they wrote it or may pass it on and that it contains no harmful function, credentials, personal data or third-party rights violations. The provider may hide or delete modules and suspend accounts at any time. Installing a shared module is at your own risk: read the code first and install only what you understand. The provider is not liable for user modules as far as the law allows (limits of section 3 unchanged); claims for damage caused by a module are directed at its author.
+16.8 Module requirements and upload criteria: Modules > "View module requirements" shows, and lets you save, the exact rules (names, file types, number and sizes of files, required plugin.py, forbidden content). The text is generated from the limits in the installed program and updates itself. Not allowed: cheats for multiplayer games (aim assistance, wallhacks, recoil compensation, reading other programs' memory), bypassing protection measures (Sec. 95a UrhG), malware, hidden code, unlawful content. Lua scripts run in a sandbox without io/os/debug. Admins can upload program versions, the Recoil Arena and modules for everyone; the admin area lists the criteria. Shared modules pass automatic checks, admin approval, a full code view with double confirmation, and the report function (reported modules are hidden at once).
+16.9 Recoil Arena: a practice game with invented weapons and patterns; it reads mouse and keyboard only in its own window, reads no game memory, sends no input to other programs and copies no real game's weapons or recoil. It is part of the program file and starts as its own process.
+16.10 Product security: the program is free and non-commercial, so the provider currently assumes not to be a "manufacturer" under the Cyber Resilience Act (EU 2024/2847); if that changes, the duties (secure design, SBOM, vulnerability reporting, security updates) will be met first. Report vulnerabilities through the contact form.
 
 SECTION 17 - KEY POINTS AT A GLANCE (ORIENTATION ONLY)
-Free, anonymous, no warranty; liability only for intent and gross negligence where allowed, mandatory law unaffected. Automation can break game rules - bans are your risk. Test every macro, use the emergency stop, back up your data. Passwords cannot be changed or recovered; export and deletion are self-service. Community: 16+, messages encrypted, names/forum not. AI answers can be wrong; enter nothing confidential. Diagnostics are pseudonymous and can be switched off; the admin sees online counts, the account list with stored e-mail and error reports. Get the program only from the official source. German law applies; mandatory consumer protection stays. This text is an unreviewed draft, not legal advice.
+Free and anonymous. Liability unlimited for intent, gross negligence and injury to life/body/health; for slight negligence only for cardinal duties and limited to foreseeable damage; mandatory law unaffected. AI Chat: you talk to an AI; messages go to the chosen provider (USA) only with your consent. Automation can break game rules - bans are your risk. Test every macro, use the emergency stop, back up your data. Passwords cannot be changed or recovered; export and deletion are self-service. Community: 16+, messages encrypted, names/forum not. AI answers can be wrong; enter nothing confidential. Chat history is saved locally only if you switch it on; auto-switching to the other AI needs your consent for it too. Diagnostics are pseudonymous and can be switched off; the admin sees online counts, the account list with stored e-mail and error reports. Get the program only from the official source. German law applies; mandatory consumer protection stays. This text is an unreviewed draft, not legal advice.
 
 SECTION 18 - PROOF, TRANSITION, CONTACT
 Clicking "Accept" after scrolling to the end is your declaration; time, version and SHA-256 checksum of the German text are stored locally. New versions replace older ones; rights and duties already arisen remain. Questions and reports go through the contact form; complaints to the supervisory authority of your place of residence (Art. 77 GDPR). Headings do not affect interpretation.

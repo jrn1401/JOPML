@@ -8,7 +8,21 @@ from modules.macros import dsl
 from . import dialogs
 from .market import MarketService, analyze, check_for_publish
 
-SORTS = {"New": "new", "Top rated": "top", "Most downloaded": "popular"}
+SORTS = {"New": "new", "Top rated": "top", "Most downloaded": "popular",
+         "Name A–Z": "az", "Most votes": "votes", "Name Z–A": "za"}
+SERVER_SORTS = {"new", "top", "popular"}        # die übrigen sortiert die App selbst, nachdem der Server geliefert hat
+
+
+def sort_rows(rows: list, mode: str) -> list:
+    """Zusätzliche Sortierungen auf dem Ergebnis des Servers (az, za, votes); andere Werte lassen die Reihenfolge unverändert."""
+    rows = list(rows)
+    if mode == "az":
+        rows.sort(key=lambda r: str(r.get("title", "")).casefold())
+    elif mode == "za":
+        rows.sort(key=lambda r: str(r.get("title", "")).casefold(), reverse=True)
+    elif mode == "votes":
+        rows.sort(key=lambda r: (-int(r.get("votes") or 0), -float(r.get("stars") or 0)))
+    return rows
 
 
 class MarketView(ctk.CTkFrame):
@@ -41,7 +55,8 @@ class MarketView(ctk.CTkFrame):
     def reload(self):
         sort = next((v for k, v in SORTS.items() if tr(k) == self.sort.get()), "new")
         q = self.q.get().strip()
-        self.page.run(lambda: self.market.browse(q, sort), self._render, lambda e: self.say(e, False))
+        fetch = sort if sort in SERVER_SORTS else "new"
+        self.page.run(lambda: sort_rows(self.market.browse(q, fetch), sort), self._render, lambda e: self.say(e, False))
 
     def _render(self, rows):
         for w in self.list.winfo_children():
@@ -112,6 +127,14 @@ class MarketView(ctk.CTkFrame):
             self.say(tr("Imported as '{n}'. Open it on the My macros page.", n=n))
             top.destroy()
         ctk.CTkButton(r, text=tr("Import"), width=100, command=do_import).pack(side="left")
+
+        def explain():
+            from modules.macros.page import show_explanation
+            try:
+                show_explanation(top, self.app, d["script"], dsl.parse(d["script"]))
+            except dsl.MacroError:
+                self.say(tr("This macro is not valid."), False)
+        ctk.CTkButton(r, text=tr("What does it do?"), width=130, fg_color=theme.c("hover"), text_color=theme.TEXT, command=explain).pack(side="left", padx=8)
         stars = ctk.CTkOptionMenu(r, values=["★" * i for i in range(1, 6)], width=100, command=lambda v: self.page.run(
             lambda: self.market.rate(d["id"], len(v)), lambda _: (self.say(tr("Thanks for rating!")), self.reload()), lambda e: self.say(e, False)))
         stars.set(tr("Rate"))
